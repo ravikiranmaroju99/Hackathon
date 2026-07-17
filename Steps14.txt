@@ -432,6 +432,11 @@ try:
 except (json.JSONDecodeError, TypeError):
     print(body)
 PY
+
+
+
+
+
 Expected result
 Lambda status code: 200
 {
