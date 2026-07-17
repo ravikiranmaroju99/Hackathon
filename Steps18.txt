@@ -135,6 +135,16 @@ Step 18B — Sync the Updated Knowledge Base
 
 Amazon Bedrock checks new, changed and deleted S3 documents when the data source is synchronized. The start-ingestion-job operation starts this sync and indexing process.
 
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+aws s3 ls "s3://$OPSAI_BUCKET/knowledge/" --recursive
+
 
 
 
