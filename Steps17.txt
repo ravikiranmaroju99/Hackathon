@@ -332,6 +332,8 @@ done
 
 echo "Updated chatbot URL: $AMPLIFY_URL"
 
+
+
 After it shows SUCCEED, press Ctrl + F5 in the browser and ask:
 
 What are the benefits of OpsAI? Give the answer with bold headings and numbered points.
