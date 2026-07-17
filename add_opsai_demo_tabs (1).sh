@@ -1,0 +1,768 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$HOME/opsai-assistant-aws"
+
+if [[ ! -f .env ]]; then
+  echo "ERROR: $HOME/opsai-assistant-aws/.env was not found."
+  exit 1
+fi
+
+set -a
+source .env
+set +a
+
+required_vars=(AWS_REGION AMPLIFY_APP_ID AMPLIFY_BRANCH_NAME AMPLIFY_URL)
+for var in "${required_vars[@]}"; do
+  if [[ -z "${!var:-}" ]]; then
+    echo "ERROR: $var is missing from .env"
+    exit 1
+  fi
+done
+
+timestamp=$(date +%Y%m%d_%H%M%S)
+cp -a app/web "app/web-backup-before-demo-tabs-${timestamp}"
+
+python3 - <<'PY'
+from pathlib import Path
+
+index_file = Path("app/web/index.html")
+html = index_file.read_text(encoding="utf-8")
+
+if 'href="demo-ops.css"' not in html:
+    html = html.replace(
+        '<link rel="stylesheet" href="styles.css">',
+        '<link rel="stylesheet" href="styles.css">\n'
+        '    <link rel="stylesheet" href="demo-ops.css">'
+    )
+
+if 'src="demo-ops.js"' not in html:
+    html = html.replace(
+        '<script src="app.js"></script>',
+        '<script src="app.js"></script>\n'
+        '    <script src="demo-ops.js"></script>'
+    )
+
+index_file.write_text(html, encoding="utf-8")
+print("index.html updated.")
+PY
+
+cat > app/web/demo-ops.css <<'EOF'
+.demo-nav {
+    display: grid;
+    gap: 7px;
+    margin-top: 9px;
+}
+
+.demo-nav-button {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    background: transparent;
+    color: #dbeafe;
+    text-align: left;
+}
+
+.demo-nav-button:hover,
+.demo-nav-button.active {
+    background: rgba(255, 255, 255, 0.13);
+    color: #ffffff;
+}
+
+.demo-count {
+    min-width: 21px;
+    margin-left: auto;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.demo-panel {
+    flex: 1;
+    padding: 26px max(24px, calc((100% - 1120px) / 2));
+    overflow-y: auto;
+}
+
+.demo-hidden {
+    display: none !important;
+}
+
+.demo-view-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.demo-view-header h2,
+.demo-view-header p {
+    margin: 0;
+}
+
+.demo-view-header p {
+    margin-top: 5px;
+    color: #64748b;
+}
+
+.demo-warning {
+    margin-bottom: 18px;
+    padding: 13px 15px;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    background: #fff7ed;
+    color: #9a3412;
+    line-height: 1.5;
+}
+
+.demo-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.demo-summary-card {
+    padding: 17px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.demo-summary-card span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.demo-summary-card strong {
+    display: block;
+    margin-top: 6px;
+    font-size: 25px;
+}
+
+.demo-summary-card.healthy {
+    border-left: 4px solid #16a34a;
+}
+
+.demo-summary-card.issue {
+    border-left: 4px solid #dc2626;
+}
+
+.demo-summary-card.pending {
+    border-left: 4px solid #f59e0b;
+}
+
+.demo-node-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 15px;
+}
+
+.demo-node-card,
+.demo-approval-card,
+.demo-empty-state {
+    padding: 18px;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, 0.05);
+}
+
+.demo-node-card.healthy {
+    border-top: 4px solid #16a34a;
+}
+
+.demo-node-card.issue {
+    border-top: 4px solid #dc2626;
+}
+
+.demo-node-card-header,
+.demo-approval-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.demo-node-card h3,
+.demo-node-card p,
+.demo-approval-card h3,
+.demo-approval-card p {
+    margin: 0;
+}
+
+.demo-node-card-header p,
+.demo-approval-card-header p {
+    margin-top: 4px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.demo-status {
+    display: inline-flex;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: #e2e8f0;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.demo-status.ready,
+.demo-status.completed,
+.demo-status.approved {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.demo-status.notready,
+.demo-status.rejected {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.demo-status.pending {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.demo-node-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.demo-node-metrics div,
+.demo-approval-details div {
+    padding: 11px;
+    border-radius: 9px;
+    background: #f8fafc;
+}
+
+.demo-node-metrics span,
+.demo-approval-details strong {
+    display: block;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.demo-node-metrics strong {
+    display: block;
+    margin-top: 4px;
+}
+
+.demo-node-issue {
+    margin-top: 12px;
+}
+
+.demo-node-issue p {
+    margin-top: 5px;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.demo-primary-button,
+.demo-secondary-button,
+.demo-approve-button,
+.demo-reject-button,
+.demo-execute-button {
+    padding: 10px 14px;
+    border-radius: 9px;
+    font-weight: 700;
+}
+
+.demo-primary-button {
+    width: 100%;
+    margin-top: 16px;
+    border: 0;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.demo-primary-button:disabled {
+    background: #e2e8f0;
+    color: #64748b;
+    cursor: default;
+}
+
+.demo-secondary-button {
+    border: 1px solid #cbd5e1;
+    background: #ffffff;
+    color: #334155;
+}
+
+.demo-approval-list {
+    display: grid;
+    gap: 14px;
+}
+
+.demo-approval-details {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.demo-approval-details p {
+    margin-top: 5px;
+    line-height: 1.45;
+}
+
+.demo-approval-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+}
+
+.demo-approve-button {
+    border: 0;
+    background: #16a34a;
+    color: #ffffff;
+}
+
+.demo-reject-button {
+    border: 1px solid #fecaca;
+    background: #fff1f2;
+    color: #b91c1c;
+}
+
+.demo-execute-button {
+    border: 0;
+    background: #2563eb;
+    color: #ffffff;
+}
+
+.demo-validation {
+    margin: 14px 0;
+    padding: 13px;
+    border-radius: 10px;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.demo-validation ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+}
+
+.demo-empty-state {
+    padding: 40px;
+    color: #64748b;
+    text-align: center;
+}
+
+@media (max-width: 850px) {
+    .demo-summary-grid,
+    .demo-node-grid,
+    .demo-approval-details {
+        grid-template-columns: 1fr;
+    }
+
+    .demo-panel {
+        padding: 18px 14px;
+    }
+
+    .demo-view-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+EOF
+
+cat > app/web/demo-ops.js <<'EOF'
+(() => {
+  const APPROVALS_KEY = 'opsai-demo-approvals-v1';
+  const RECOVERED_KEY = 'opsai-demo-recovered-v1';
+
+  const nodes = [
+    {
+      name: 'lin-advqa-rke2-node1.ams.com',
+      status: 'Ready', condition: 'Healthy', pods: 18,
+      issue: 'No active issue', action: 'No action required', impact: 'None'
+    },
+    {
+      name: 'lin-advqa-rke2-node2.ams.com',
+      status: 'NotReady', condition: 'RKE2 agent unavailable', pods: 7,
+      issue: 'The RKE2 agent is not responding and application pods may be affected.',
+      action: 'Cordon, drain and restart the RKE2 agent',
+      impact: 'Pods may move to other workers. A short impact is possible if capacity is insufficient.'
+    },
+    {
+      name: 'lin-advqa-rke2-node3.ams.com',
+      status: 'Ready', condition: 'DiskPressure=True', pods: 14,
+      issue: 'Root filesystem usage is 92%.',
+      action: 'Clean approved old logs and revalidate DiskPressure',
+      impact: 'No reboot is planned. Only approved files are included in this demo request.'
+    }
+  ];
+
+  let approvals = read(APPROVALS_KEY, []);
+  let recovered = read(RECOVERED_KEY, []);
+
+  const sidebar = document.getElementById('sidebar');
+  const newChat = document.getElementById('new-chat-button');
+  const messages = document.getElementById('messages');
+  const composer = document.querySelector('.composer-area');
+  const chatArea = document.querySelector('.chat-area');
+  const title = document.querySelector('.top-header h2');
+  const subtitle = document.querySelector('.top-header p');
+
+  if (!sidebar || !newChat || !messages || !composer || !chatArea) return;
+
+  const nav = document.createElement('div');
+  nav.className = 'demo-nav';
+  nav.innerHTML = `
+    <button class="demo-nav-button" data-view="workers">▦ Worker Nodes</button>
+    <button class="demo-nav-button" data-view="approvals">
+      ✓ Approvals <span id="approval-count" class="demo-count">0</span>
+    </button>`;
+  newChat.insertAdjacentElement('afterend', nav);
+
+  const workersPanel = document.createElement('section');
+  const approvalsPanel = document.createElement('section');
+  workersPanel.className = 'demo-panel demo-hidden';
+  approvalsPanel.className = 'demo-panel demo-hidden';
+  chatArea.insertBefore(workersPanel, composer);
+  chatArea.insertBefore(approvalsPanel, composer);
+
+  function read(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+    catch { return fallback; }
+  }
+
+  function save() {
+    localStorage.setItem(APPROVALS_KEY, JSON.stringify(approvals));
+    localStorage.setItem(RECOVERED_KEY, JSON.stringify(recovered));
+  }
+
+  function esc(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+    }[char]));
+  }
+
+  function currentNode(node) {
+    return recovered.includes(node.name)
+      ? {...node, status: 'Ready', condition: 'Healthy',
+          issue: 'Demo recovery completed', action: 'No action required'}
+      : node;
+  }
+
+  function show(view) {
+    const isChat = view === 'chat';
+    messages.style.display = isChat ? '' : 'none';
+    composer.style.display = isChat ? '' : 'none';
+    workersPanel.classList.toggle('demo-hidden', view !== 'workers');
+    approvalsPanel.classList.toggle('demo-hidden', view !== 'approvals');
+
+    nav.querySelectorAll('button').forEach(button =>
+      button.classList.toggle('active', button.dataset.view === view));
+
+    if (title && subtitle) {
+      title.textContent = view === 'workers' ? 'Worker Node Health'
+        : view === 'approvals' ? 'Approvals' : 'OpsAI Assistant';
+
+      subtitle.textContent = view === 'workers'
+        ? 'Dummy cluster health for the demo'
+        : view === 'approvals'
+          ? 'Human approval workflow demonstration'
+          : 'Enterprise IT Operations Support';
+    }
+
+    if (view === 'workers') renderWorkers();
+    if (view === 'approvals') renderApprovals();
+    sidebar.classList.remove('open');
+  }
+
+  function renderWorkers() {
+    const displayNodes = nodes.map(currentNode);
+    const issues = displayNodes.filter(node => node.condition !== 'Healthy').length;
+
+    workersPanel.innerHTML = `
+      <div class="demo-view-header">
+        <div><h2>Worker Nodes</h2><p>Dummy data for the hackathon demonstration.</p></div>
+        <button class="demo-secondary-button" data-reset>Reset Demo</button>
+      </div>
+
+      <div class="demo-warning">
+        <strong>DEMO ONLY:</strong>
+        No live cluster connection and no real command is executed.
+      </div>
+
+      <div class="demo-summary-grid">
+        <div class="demo-summary-card"><span>Total workers</span><strong>${displayNodes.length}</strong></div>
+        <div class="demo-summary-card healthy"><span>Healthy</span><strong>${displayNodes.length - issues}</strong></div>
+        <div class="demo-summary-card issue"><span>Issues</span><strong>${issues}</strong></div>
+        <div class="demo-summary-card pending"><span>Pending</span><strong>${approvals.filter(a => a.status === 'PENDING').length}</strong></div>
+      </div>
+
+      <div class="demo-node-grid">${displayNodes.map(nodeCard).join('')}</div>`;
+  }
+
+  function nodeCard(node) {
+    const healthy = node.condition === 'Healthy';
+    const openRequest = approvals.find(
+      item => item.node === node.name &&
+      ['PENDING', 'APPROVED'].includes(item.status)
+    );
+
+    return `
+      <article class="demo-node-card ${healthy ? 'healthy' : 'issue'}">
+        <div class="demo-node-card-header">
+          <div><h3>${esc(node.name)}</h3><p>Worker</p></div>
+          <span class="demo-status ${node.status.toLowerCase()}">${esc(node.status)}</span>
+        </div>
+
+        <div class="demo-node-metrics">
+          <div><span>Condition</span><strong>${esc(node.condition)}</strong></div>
+          <div><span>Pods</span><strong>${node.pods}</strong></div>
+        </div>
+
+        <div class="demo-node-issue">
+          <strong>Finding</strong><p>${esc(node.issue)}</p>
+        </div>
+
+        <div class="demo-node-issue">
+          <strong>Recommended action</strong><p>${esc(node.action)}</p>
+        </div>
+
+        ${healthy
+          ? '<button class="demo-primary-button" disabled>No approval required</button>'
+          : openRequest
+            ? '<button class="demo-primary-button" data-open-approvals>View approval request</button>'
+            : `<button class="demo-primary-button" data-request="${esc(node.name)}">Request Approval</button>`}
+      </article>`;
+  }
+
+  function requestApproval(nodeName) {
+    const node = nodes.find(item => item.name === nodeName);
+    if (!node) return;
+
+    const exists = approvals.some(
+      item => item.node === nodeName &&
+      ['PENDING', 'APPROVED'].includes(item.status)
+    );
+
+    if (!exists) {
+      approvals.unshift({
+        id: `APR-${Date.now()}`,
+        node: node.name,
+        action: node.action,
+        reason: node.issue,
+        impact: node.impact,
+        status: 'PENDING',
+        requestedBy: 'OpsAI Demo User',
+        requestedAt: new Date().toLocaleString(),
+        approver: 'Not assigned',
+        validation: []
+      });
+      save();
+    }
+
+    updateCount();
+    show('approvals');
+  }
+
+  function renderApprovals() {
+    approvalsPanel.innerHTML = `
+      <div class="demo-view-header">
+        <div><h2>Approvals</h2><p>Dummy human-in-the-loop workflow.</p></div>
+        <button class="demo-secondary-button" data-reset>Reset Demo</button>
+      </div>
+
+      <div class="demo-warning">
+        <strong>DEMO ONLY:</strong>
+        Approve, reject and simulate update this browser only.
+      </div>
+
+      <div class="demo-approval-list">
+        ${approvals.length
+          ? approvals.map(approvalCard).join('')
+          : '<div class="demo-empty-state"><h3>No approval requests</h3><p>Open Worker Nodes and request approval for a dummy issue.</p></div>'}
+      </div>`;
+  }
+
+  function approvalCard(item) {
+    const buttons = item.status === 'PENDING'
+      ? `<button class="demo-reject-button" data-reject="${item.id}">Reject</button>
+         <button class="demo-approve-button" data-approve="${item.id}">Approve</button>`
+      : item.status === 'APPROVED'
+        ? `<button class="demo-execute-button" data-execute="${item.id}">Simulate Approved Action</button>`
+        : '';
+
+    const validation = item.validation.length
+      ? `<div class="demo-validation">
+           <strong>Demo validation</strong>
+           <ul>${item.validation.map(value => `<li>${esc(value)}</li>`).join('')}</ul>
+         </div>`
+      : '';
+
+    return `
+      <article class="demo-approval-card">
+        <div class="demo-approval-card-header">
+          <div><span>${esc(item.id)}</span><h3>${esc(item.action)}</h3><p>${esc(item.node)}</p></div>
+          <span class="demo-status ${item.status.toLowerCase()}">${item.status}</span>
+        </div>
+
+        <div class="demo-approval-details">
+          <div><strong>Reason</strong><p>${esc(item.reason)}</p></div>
+          <div><strong>Possible impact</strong><p>${esc(item.impact)}</p></div>
+          <div><strong>Requested by</strong><p>${esc(item.requestedBy)}</p></div>
+          <div><strong>Approver</strong><p>${esc(item.approver)}</p></div>
+        </div>
+
+        ${validation}
+        <div class="demo-approval-actions">${buttons}</div>
+      </article>`;
+  }
+
+  function decide(id, status) {
+    const item = approvals.find(value => value.id === id);
+    if (!item) return;
+
+    item.status = status;
+    item.approver = 'Demo Project Approver';
+    save();
+    updateCount();
+    renderApprovals();
+  }
+
+  function simulate(id) {
+    const item = approvals.find(value => value.id === id);
+    if (!item || item.status !== 'APPROVED') return;
+
+    item.status = 'COMPLETED';
+    item.validation = [
+      'Node status: Ready',
+      'DiskPressure: False',
+      'Application pods: Running',
+      'No real action was executed'
+    ];
+
+    if (!recovered.includes(item.node)) recovered.push(item.node);
+
+    save();
+    updateCount();
+    renderApprovals();
+  }
+
+  function reset() {
+    if (!window.confirm('Reset dummy nodes and approval requests?')) return;
+
+    approvals = [];
+    recovered = [];
+    save();
+    updateCount();
+    renderWorkers();
+    renderApprovals();
+  }
+
+  function updateCount() {
+    const badge = document.getElementById('approval-count');
+    if (badge) {
+      badge.textContent = approvals.filter(
+        item => item.status === 'PENDING'
+      ).length;
+    }
+  }
+
+  nav.addEventListener('click', event => {
+    const button = event.target.closest('[data-view]');
+    if (button) show(button.dataset.view);
+  });
+
+  workersPanel.addEventListener('click', event => {
+    const request = event.target.closest('[data-request]');
+    if (request) requestApproval(request.dataset.request);
+    if (event.target.closest('[data-open-approvals]')) show('approvals');
+    if (event.target.closest('[data-reset]')) reset();
+  });
+
+  approvalsPanel.addEventListener('click', event => {
+    const approve = event.target.closest('[data-approve]');
+    const reject = event.target.closest('[data-reject]');
+    const execute = event.target.closest('[data-execute]');
+
+    if (approve) decide(approve.dataset.approve, 'APPROVED');
+    if (reject) decide(reject.dataset.reject, 'REJECTED');
+    if (execute) simulate(execute.dataset.execute);
+    if (event.target.closest('[data-reset]')) reset();
+  });
+
+  newChat.addEventListener('click', () => show('chat'));
+  updateCount();
+})();
+EOF
+
+node --check app/web/demo-ops.js
+
+rm -f app/opsai-assistant-ui.zip
+(
+  cd app/web
+  zip -qr ../opsai-assistant-ui.zip .
+)
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+echo "Waiting for deployment..."
+
+while true; do
+  STATUS=$(aws amplify get-job \
+    --app-id "$AMPLIFY_APP_ID" \
+    --branch-name "$AMPLIFY_BRANCH_NAME" \
+    --job-id "$JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'job.summary.status' \
+    --output text)
+
+  echo "Deployment status: $STATUS"
+
+  case "$STATUS" in
+    SUCCEED)
+      break
+      ;;
+    FAILED|CANCELLED)
+      echo "Deployment failed."
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+echo
+echo "Demo tabs added successfully."
+echo "Open: $AMPLIFY_URL"
+echo "Refresh the browser using Ctrl + F5."
