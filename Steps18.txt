@@ -900,3 +900,40 @@ done
 
 
 
+
+
+
+To incrase the prmopt speed update the lambda function from 256 to 512 Optional:
+_________________________________________________________
+RUN:
+
+
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+aws lambda update-function-configuration \
+  --function-name opsai-assistant-api \
+  --region "$AWS_REGION" \
+  --memory-size 512 \
+  >/dev/null
+
+aws lambda wait function-updated \
+  --function-name opsai-assistant-api \
+  --region "$AWS_REGION"
+
+aws lambda get-function-configuration \
+  --function-name opsai-assistant-api \
+  --region "$AWS_REGION" \
+  --query '{
+    Function:FunctionName,
+    Memory:MemorySize,
+    Timeout:Timeout,
+    State:State
+  }' \
+  --output table
+
+
