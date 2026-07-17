@@ -116,12 +116,28 @@ echo
 echo "Uploaded documents:"
 aws s3 ls "s3://$OPSAI_BUCKET/knowledge/"
 
+
+
+
+
+
+
+Output
 You should see:
 
 opsai-assistant-overview.md
+
+
+
+
+
 Step 18B — Sync the Updated Knowledge Base
 
 Amazon Bedrock checks new, changed and deleted S3 documents when the data source is synchronized. The start-ingestion-job operation starts this sync and indexing process.
+
+
+
+
 
 Run:
 
@@ -211,6 +227,11 @@ aws bedrock-agent get-ingestion-job \
   --query \
   'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
   --output json
+
+
+
+
+
 
 The expected final status is:
 
