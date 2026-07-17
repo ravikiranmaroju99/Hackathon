@@ -6,6 +6,8 @@ The application will need both the Agent ID and Alias ID to call the agent.
 
 Open CloudShell as opsai-admin and run:
 
+Change the agent id MYZQPFHH7P 
+
 aws bedrock-agent list-agent-aliases \
   --agent-id FJ6R3CBW6H \
   --region us-east-1 \
