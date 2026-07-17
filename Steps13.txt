@@ -33,9 +33,12 @@ aws bedrock-agent get-agent-alias \
   --region "$AWS_REGION" \
   --query 'agentAlias.{AliasName:agentAliasName,AliasID:agentAliasId,Status:agentAliasStatus,Routing:routingConfiguration}' \
   --output json
+
+
+
 Verified result
-Agent ID: FJ6R3CBW6H
-Alias ID: LRVAF80EAC
+Agent ID: S64EIXPDJJ
+Alias ID: MYZQPFHH7P
 Alias name: opsai-mvp
 Status: PREPARED
 Agent version: 1
