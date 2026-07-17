@@ -62,7 +62,19 @@ echo "Alias ID: $BEDROCK_AGENT_ALIAS_ID"
 Expected output
 Region: us-east-1
 Bucket: opsai-assistant-kb-845482522818-us-east-1
-Agent ID: FJ6R3CBW6H
-Alias ID: LRVAF80EAC
+Agent ID: S64EIXPDJJ
+Alias ID: MYZQPFHH7P
+
+
+for buket details run and update above 
+
+aws s3api list-buckets \
+  --query "Buckets[?starts_with(Name, 'opsai-assistant-kb-')].Name" \
+  --output table
+
+Note: below need to be updated 
+
+AGENT_ID="S64EIXPDJJ"
+ALIAS_ID="MYZQPFHH7P"
 
 Complete only this step
