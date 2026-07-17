@@ -141,92 +141,142 @@ Amazon Bedrock checks new, changed and deleted S3 documents when the data source
 
 Run:
 
-cd ~/opsai-assistant-aws
+sync_opsai_knowledge_base() {
+  cd ~/opsai-assistant-aws || return 1
 
-set -a
-source .env
-set +a
+  set -a
+  source .env
+  set +a
 
-KB_ID=$(aws bedrock-agent list-knowledge-bases \
-  --region "$AWS_REGION" \
-  --query \
-  "knowledgeBaseSummaries[?name=='opsai-assistant-kb'].knowledgeBaseId | [0]" \
-  --output text)
+  local KB_ID
+  local DATA_SOURCE_ID
+  local INGESTION_JOB_ID
+  local STATUS
 
-if [[ -z "$KB_ID" || "$KB_ID" == "None" ]]; then
-  echo "ERROR: Could not find opsai-assistant-kb."
-  exit 1
-fi
+  echo "Region: $AWS_REGION"
+  echo "Searching for Knowledge Base..."
 
-DATA_SOURCE_ID=$(aws bedrock-agent list-data-sources \
-  --knowledge-base-id "$KB_ID" \
-  --region "$AWS_REGION" \
-  --query \
-  "dataSourceSummaries[?name=='opsai-runbooks-s3'].dataSourceId | [0]" \
-  --output text)
+  KB_ID=$(aws bedrock-agent list-knowledge-bases \
+    --region "$AWS_REGION" \
+    --query \
+    "knowledgeBaseSummaries[?name=='opsai-assistant-kb'].knowledgeBaseId | [0]" \
+    --output text)
 
-if [[ -z "$DATA_SOURCE_ID" || "$DATA_SOURCE_ID" == "None" ]]; then
-  echo "ERROR: Could not find opsai-runbooks-s3."
-  exit 1
-fi
+  if [[ -z "$KB_ID" || "$KB_ID" == "None" ]]; then
+    echo "ERROR: Could not find opsai-assistant-kb."
+    echo
+    echo "Available Knowledge Bases:"
 
-echo "Knowledge Base ID: $KB_ID"
-echo "Data Source ID: $DATA_SOURCE_ID"
+    aws bedrock-agent list-knowledge-bases \
+      --region "$AWS_REGION" \
+      --query \
+      'knowledgeBaseSummaries[].{Name:name,ID:knowledgeBaseId,Status:status}' \
+      --output table
 
-INGESTION_JOB_ID=$(aws bedrock-agent start-ingestion-job \
-  --knowledge-base-id "$KB_ID" \
-  --data-source-id "$DATA_SOURCE_ID" \
-  --description "Add OpsAI overview and benefits document" \
-  --region "$AWS_REGION" \
-  --query 'ingestionJob.ingestionJobId' \
-  --output text)
+    return 1
+  fi
 
-echo "Ingestion Job ID: $INGESTION_JOB_ID"
-echo "Waiting for Knowledge Base sync..."
+  echo "Knowledge Base ID: $KB_ID"
+  echo "Searching for the data source..."
 
-while true
-do
-  STATUS=$(aws bedrock-agent get-ingestion-job \
+  DATA_SOURCE_ID=$(aws bedrock-agent list-data-sources \
+    --knowledge-base-id "$KB_ID" \
+    --region "$AWS_REGION" \
+    --query \
+    "dataSourceSummaries[?name=='opsai-runbooks-s3'].dataSourceId | [0]" \
+    --output text)
+
+  if [[ -z "$DATA_SOURCE_ID" || "$DATA_SOURCE_ID" == "None" ]]; then
+    echo "ERROR: Could not find opsai-runbooks-s3."
+    echo
+    echo "Available data sources:"
+
+    aws bedrock-agent list-data-sources \
+      --knowledge-base-id "$KB_ID" \
+      --region "$AWS_REGION" \
+      --query \
+      'dataSourceSummaries[].{Name:name,ID:dataSourceId,Status:status}' \
+      --output table
+
+    return 1
+  fi
+
+  echo "Data Source ID: $DATA_SOURCE_ID"
+  echo "Starting Knowledge Base sync..."
+
+  INGESTION_JOB_ID=$(aws bedrock-agent start-ingestion-job \
+    --knowledge-base-id "$KB_ID" \
+    --data-source-id "$DATA_SOURCE_ID" \
+    --description "Sync OpsAI approved knowledge documents" \
+    --region "$AWS_REGION" \
+    --query 'ingestionJob.ingestionJobId' \
+    --output text)
+
+  if [[ -z "$INGESTION_JOB_ID" || "$INGESTION_JOB_ID" == "None" ]]; then
+    echo "ERROR: The ingestion job was not started."
+    return 1
+  fi
+
+  echo "Ingestion Job ID: $INGESTION_JOB_ID"
+  echo "Waiting for Knowledge Base sync..."
+
+  while true
+  do
+    STATUS=$(aws bedrock-agent get-ingestion-job \
+      --knowledge-base-id "$KB_ID" \
+      --data-source-id "$DATA_SOURCE_ID" \
+      --ingestion-job-id "$INGESTION_JOB_ID" \
+      --region "$AWS_REGION" \
+      --query 'ingestionJob.status' \
+      --output text)
+
+    echo "Sync status: $STATUS"
+
+    case "$STATUS" in
+      COMPLETE)
+        echo "Knowledge Base sync completed successfully."
+        break
+        ;;
+
+      FAILED|STOPPED)
+        echo "ERROR: Knowledge Base sync was not successful."
+
+        aws bedrock-agent get-ingestion-job \
+          --knowledge-base-id "$KB_ID" \
+          --data-source-id "$DATA_SOURCE_ID" \
+          --ingestion-job-id "$INGESTION_JOB_ID" \
+          --region "$AWS_REGION" \
+          --query 'ingestionJob.failureReasons' \
+          --output json
+
+        return 1
+        ;;
+
+      STARTING|IN_PROGRESS|STOPPING)
+        sleep 10
+        ;;
+
+      *)
+        echo "Waiting. Current status: $STATUS"
+        sleep 10
+        ;;
+    esac
+  done
+
+  aws bedrock-agent get-ingestion-job \
     --knowledge-base-id "$KB_ID" \
     --data-source-id "$DATA_SOURCE_ID" \
     --ingestion-job-id "$INGESTION_JOB_ID" \
     --region "$AWS_REGION" \
-    --query 'ingestionJob.status' \
-    --output text)
+    --query \
+    'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
+    --output json
+}
 
-  echo "Sync status: $STATUS"
+sync_opsai_knowledge_base
 
-  case "$STATUS" in
-    COMPLETE)
-      break
-      ;;
-    FAILED|STOPPED)
-      echo "Knowledge Base sync was not successful."
 
-      aws bedrock-agent get-ingestion-job \
-        --knowledge-base-id "$KB_ID" \
-        --data-source-id "$DATA_SOURCE_ID" \
-        --ingestion-job-id "$INGESTION_JOB_ID" \
-        --region "$AWS_REGION" \
-        --query 'ingestionJob.failureReasons' \
-        --output json
 
-      exit 1
-      ;;
-    *)
-      sleep 10
-      ;;
-  esac
-done
-
-aws bedrock-agent get-ingestion-job \
-  --knowledge-base-id "$KB_ID" \
-  --data-source-id "$DATA_SOURCE_ID" \
-  --ingestion-job-id "$INGESTION_JOB_ID" \
-  --region "$AWS_REGION" \
-  --query \
-  'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
-  --output json
 
 
 
