@@ -88,6 +88,10 @@ aws iam get-role-policy \
   --policy-name OpsAIInvokeBedrockAgent \
   --query 'PolicyDocument.Statement[0].{Action:Action,Resource:Resource}' \
   --output table
+
+
+
+
 Expected result
 
 You should see:
