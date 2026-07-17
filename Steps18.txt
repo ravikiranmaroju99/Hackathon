@@ -725,6 +725,11 @@ The working-draft test should answer:
 OpsAI Assistant was created by Ravi Kiran Maroju.
 
 For suggestions or concerns, contact ravi.maroju@cgi.com.
+
+
+_____________________________________________
+
+
 Step 18F — Update the Deployed Alias
 
 Preparing updates the working draft used for testing. Your application invokes the opsai-mvp alias, so that alias must be associated with the updated numbered version.
@@ -746,4 +751,152 @@ What are the benefits of OpsAI? Give the answer with bold headings and numbered 
 Who created OpsAI Assistant and whom should I contact for suggestions?
 
 The HTML tags should disappear, and the creator/contact answer should be correct.
+
+
+
+Step18G
+++++++++++++++++++++++++++++++++++++++++++++++++++
+Fix the numbering
+Run this in CloudShell:
+___________________________
+
+cd ~/opsai-assistant-aws
+
+cp app/web/styles.css \
+  "app/web/styles.css.backup-$(date +%Y%m%d-%H%M%S)"
+
+python3 - <<'PY'
+from pathlib import Path
+
+css_file = Path("app/web/styles.css")
+content = css_file.read_text(encoding="utf-8")
+
+marker = "/* OpsAI continuous ordered-list numbering */"
+
+css_fix = r'''
+/* OpsAI continuous ordered-list numbering */
+
+.message-row.assistant .message-bubble {
+    counter-reset: opsai-list-number;
+}
+
+.message-row.assistant .message-bubble ol {
+    margin: 10px 0;
+    padding-left: 0;
+    list-style: none;
+}
+
+.message-row.assistant .message-bubble ol > li {
+    position: relative;
+    counter-increment: opsai-list-number;
+    margin: 9px 0;
+    padding-left: 30px;
+}
+
+.message-row.assistant .message-bubble ol > li::before {
+    content: counter(opsai-list-number) ".";
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 24px;
+    font-weight: 700;
+}
+'''
+
+if marker in content:
+    print("Continuous numbering fix is already present.")
+else:
+    css_file.write_text(
+        content.rstrip() + "\n\n" + css_fix.strip() + "\n",
+        encoding="utf-8",
+    )
+    print("Continuous numbering fix added.")
+PY
+
+grep -n "continuous ordered-list" app/web/styles.css
+
+
+
+
+
+
+
+
+
+
+
+Redeploy the UI
+________________________
+Run:
+
+
+
+
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+rm -f app/opsai-assistant-ui.zip
+
+(
+  cd app/web
+  zip -qr ../opsai-assistant-ui.zip .
+)
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+while true
+do
+  STATUS=$(aws amplify get-job \
+    --app-id "$AMPLIFY_APP_ID" \
+    --branch-name "$AMPLIFY_BRANCH_NAME" \
+    --job-id "$JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'job.summary.status' \
+    --output text)
+
+  echo "Deployment status: $STATUS"
+
+  case "$STATUS" in
+    SUCCEED)
+      echo "UI deployment completed successfully."
+      break
+      ;;
+    FAILED|CANCELLED)
+      echo "ERROR: Deployment was not successful."
+      break
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+
+
+
 
