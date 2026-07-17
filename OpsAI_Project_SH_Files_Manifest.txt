@@ -1,0 +1,90 @@
+OPSAI ASSISTANT AWS PROJECT — FINAL SHELL SCRIPT SET
+======================================================
+
+Use this file set only. Older repair and intermediate scripts are intentionally
+excluded to avoid confusion.
+
+FRESH BUILD ORDER
+-----------------
+Steps 1–19:
+Follow the complete Notepad guide because those steps create AWS resources,
+the Knowledge Base, Bedrock Agent, Lambda, API Gateway, Amplify, and the base UI.
+
+Step 20:
+Run:
+  add_opsai_demo_tabs.sh
+
+This adds Infrastructure Assets and Approvals to the already-deployed base UI.
+
+Step 22 — RECOMMENDED FINAL INSTALLATION:
+Run only:
+  step22_to_hr_quick_buttons_all_in_one_final.sh
+
+This all-in-one script already contains and runs the final HR Portal and UI
+phases. Do not run the component scripts again after it succeeds.
+
+FINAL COMPONENT SCRIPTS
+-----------------------
+These are provided separately for troubleshooting or rerunning one phase:
+
+  install_opsai_hr_portal_final.sh
+  upgrade_opsai_ui_with_images_final.sh
+  fix_opsai_ui_moving_data.sh
+  upgrade_opsai_home_enhancements_final.sh
+  replace_map_with_right_side_globe.sh
+  fix_opsai_hr_quick_buttons_final.sh
+
+Run these component scripts only when you need to repair or update that
+specific phase. When using the all-in-one Step 22 file, they are not required
+to be run separately.
+
+OPTIONAL KNOWLEDGE BASE CAREER DATA
+-----------------------------------
+  add_career_use_case.sh
+
+This is optional. It requires the separate source file:
+  cgi-career-opportunities-demo.md
+
+It uploads that document to the Knowledge Base and starts a sync. The final HR
+quick buttons do not depend on this script because they open the local HR Portal
+directly.
+
+COMPLETE CLEANUP
+----------------
+Run only when you want to remove the AWS project resources:
+
+  cleanup_opsai_aws.sh
+
+IMPORTANT
+---------
+1. All scripts expect the project folder:
+     $HOME/opsai-assistant-aws
+
+2. Most scripts expect:
+     $HOME/opsai-assistant-aws/.env
+
+3. Use the same AWS IAM identity and us-east-1 region used for the build.
+
+4. Do not run obsolete scripts such as:
+     add_opsai_hr_portal.sh
+     upgrade_opsai_hr_portal_v2.sh
+     upgrade_opsai_hr_hiring_stages.sh
+     repair_hr_portal_tab.sh
+     fix_opsai_hr_portal_missing_tab.sh
+     add_opsai_world_map_final.sh
+
+5. After any Amplify deployment, open the website in Incognito mode or press:
+     Ctrl + Shift + R
+
+VALIDATED FILES
+---------------
+add_opsai_demo_tabs.sh  SHA256=ab1bf78272002e771df1cefa78a4154ae872b914740bbbe3e64837a6fc0b11ec
+install_opsai_hr_portal_final.sh  SHA256=40e34ef7aca1ff9f68c4fec7d84298c7a2f7457c7b5de7f3c7b6be3041c65fc7
+upgrade_opsai_ui_with_images_final.sh  SHA256=27e771e5fcc54f392bd914a9f4539049827b17e998fc9153bfb52ebab3f5f995
+fix_opsai_ui_moving_data.sh  SHA256=0b5130c3463d127d8f4fa0a73a2380371fa8ff9928be9f2b0c855dc6aaa13ec9
+upgrade_opsai_home_enhancements_final.sh  SHA256=23870586e11829df726508dc09f9fc40514944774ec560bb546fd8b9d5487c42
+replace_map_with_right_side_globe.sh  SHA256=d9f8f8c502fe0453956ed2b5dce014e569ef53035fb7c09ec0b366690231b65a
+fix_opsai_hr_quick_buttons_final.sh  SHA256=7f0158777258238173a262728bce30fd54d198f85acb545fde3106e0cc6e50bf
+step22_to_hr_quick_buttons_all_in_one_final.sh  SHA256=6c32470682c6ce2150f697269512abc7767a9268a777516bda26047697987fab
+cleanup_opsai_aws.sh  SHA256=70bc0daaa97bb85444196e0d08bdb475bc94c1ed9b892cf8c882f82d7e109a2c
+add_career_use_case.sh  SHA256=9089eeeee6b2a68ebbb64901011a16ab4f6ff197d3a7de7d5379306fe0f24d6c
