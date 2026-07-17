@@ -133,102 +133,235 @@ opsai-assistant-overview.md
 
 Step 18B — Sync the Updated Knowledge Base
 
-Amazon Bedrock checks new, changed and deleted S3 documents when the data source is synchronized. The start-ingestion-job operation starts this sync and indexing process.
+18B with this corrected block
 
-Run:
-
-cd ~/opsai-assistant-aws
-
-set -a
-source .env
-set +a
-
-aws s3 ls "s3://$OPSAI_BUCKET/knowledge/" --recursive
-
-
-
-
-
-Run:
+Paste the complete block below. It will overwrite the old function in the current CloudShell session.
 
 sync_opsai_knowledge_base() {
-  cd ~/opsai-assistant-aws || return 1
+  local PROJECT_DIR="$HOME/opsai-assistant-aws"
+  local ENV_FILE="$PROJECT_DIR/.env"
+  local KB_NAME="opsai-assistant-kb"
 
-  set -a
-  source .env
-  set +a
-
+  local ACCOUNT_ID
   local KB_ID
+  local KB_STATUS
   local DATA_SOURCE_ID
+  local DATA_SOURCE_NAME
+  local DATA_SOURCE_BUCKET_ARN
+  local EXPECTED_BUCKET_ARN
+  local ACTIVE_JOB_ID
   local INGESTION_JOB_ID
   local STATUS
 
-  echo "Region: $AWS_REGION"
-  echo "Searching for Knowledge Base..."
+  cd "$PROJECT_DIR" || {
+    echo "ERROR: Project directory was not found."
+    return 1
+  }
 
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "ERROR: $ENV_FILE was not found."
+    return 1
+  fi
+
+  set -a
+  source "$ENV_FILE"
+  set +a
+
+  AWS_REGION="${AWS_REGION:-us-east-1}"
+  AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
+
+  export AWS_REGION
+  export AWS_DEFAULT_REGION
+
+  echo "============================================================"
+  echo " OpsAI Knowledge Base Synchronization"
+  echo "============================================================"
+  echo
+  echo "Region: $AWS_REGION"
+
+  # Automatically create the expected bucket name when it is missing.
+  if [[ -z "${OPSAI_BUCKET:-}" ]]; then
+    ACCOUNT_ID=$(aws sts get-caller-identity \
+      --query Account \
+      --output text) || return 1
+
+    OPSAI_BUCKET="opsai-assistant-kb-${ACCOUNT_ID}-${AWS_REGION}"
+  fi
+
+  echo "S3 bucket: $OPSAI_BUCKET"
+
+  if ! aws s3api head-bucket \
+    --bucket "$OPSAI_BUCKET" \
+    >/dev/null 2>&1
+  then
+    echo "ERROR: Bucket was not found or cannot be accessed:"
+    echo "  $OPSAI_BUCKET"
+    return 1
+  fi
+
+  echo
+  echo "Knowledge documents currently stored in S3:"
+
+  aws s3 ls \
+    "s3://$OPSAI_BUCKET/knowledge/" \
+    --recursive || return 1
+
+  echo
+  echo "Searching for the active Knowledge Base..."
+
+  # Keep the complete JMESPath query on one line.
   KB_ID=$(aws bedrock-agent list-knowledge-bases \
     --region "$AWS_REGION" \
-    --query \
-    "knowledgeBaseSummaries[?name=='opsai-assistant-kb'].knowledgeBaseId | [0]" \
-    --output text)
+    --query "knowledgeBaseSummaries[?name=='$KB_NAME' && status=='ACTIVE'].knowledgeBaseId | [0]" \
+    --output text) || return 1
 
   if [[ -z "$KB_ID" || "$KB_ID" == "None" ]]; then
-    echo "ERROR: Could not find opsai-assistant-kb."
+    echo "ERROR: Active Knowledge Base $KB_NAME was not found."
     echo
     echo "Available Knowledge Bases:"
 
     aws bedrock-agent list-knowledge-bases \
       --region "$AWS_REGION" \
-      --query \
-      'knowledgeBaseSummaries[].{Name:name,ID:knowledgeBaseId,Status:status}' \
+      --query 'knowledgeBaseSummaries[].{Name:name,ID:knowledgeBaseId,Status:status}' \
       --output table
 
     return 1
   fi
 
-  echo "Knowledge Base ID: $KB_ID"
-  echo "Searching for the data source..."
+  KB_STATUS=$(aws bedrock-agent get-knowledge-base \
+    --knowledge-base-id "$KB_ID" \
+    --region "$AWS_REGION" \
+    --query 'knowledgeBase.status' \
+    --output text) || return 1
 
+  echo "Knowledge Base name: $KB_NAME"
+  echo "Knowledge Base ID: $KB_ID"
+  echo "Knowledge Base status: $KB_STATUS"
+
+  echo
+  echo "Searching for an available S3 data source..."
+
+  # Select the available data source without depending on its name.
   DATA_SOURCE_ID=$(aws bedrock-agent list-data-sources \
     --knowledge-base-id "$KB_ID" \
     --region "$AWS_REGION" \
-    --query \
-    "dataSourceSummaries[?name=='opsai-runbooks-s3'].dataSourceId | [0]" \
-    --output text)
+    --query "dataSourceSummaries[?status=='AVAILABLE'].dataSourceId | [0]" \
+    --output text) || return 1
 
   if [[ -z "$DATA_SOURCE_ID" || "$DATA_SOURCE_ID" == "None" ]]; then
-    echo "ERROR: Could not find opsai-runbooks-s3."
+    echo "ERROR: No AVAILABLE data source was found."
     echo
-    echo "Available data sources:"
+    echo "Configured data sources:"
 
     aws bedrock-agent list-data-sources \
       --knowledge-base-id "$KB_ID" \
       --region "$AWS_REGION" \
-      --query \
-      'dataSourceSummaries[].{Name:name,ID:dataSourceId,Status:status}' \
+      --query 'dataSourceSummaries[].{Name:name,ID:dataSourceId,Status:status}' \
       --output table
 
     return 1
   fi
 
-  echo "Data Source ID: $DATA_SOURCE_ID"
-  echo "Starting Knowledge Base sync..."
-
-  INGESTION_JOB_ID=$(aws bedrock-agent start-ingestion-job \
+  DATA_SOURCE_NAME=$(aws bedrock-agent get-data-source \
     --knowledge-base-id "$KB_ID" \
     --data-source-id "$DATA_SOURCE_ID" \
-    --description "Sync OpsAI approved knowledge documents" \
     --region "$AWS_REGION" \
-    --query 'ingestionJob.ingestionJobId' \
-    --output text)
+    --query 'dataSource.name' \
+    --output text) || return 1
 
-  if [[ -z "$INGESTION_JOB_ID" || "$INGESTION_JOB_ID" == "None" ]]; then
-    echo "ERROR: The ingestion job was not started."
+  DATA_SOURCE_BUCKET_ARN=$(aws bedrock-agent get-data-source \
+    --knowledge-base-id "$KB_ID" \
+    --data-source-id "$DATA_SOURCE_ID" \
+    --region "$AWS_REGION" \
+    --query 'dataSource.dataSourceConfiguration.s3Configuration.bucketArn' \
+    --output text) || return 1
+
+  EXPECTED_BUCKET_ARN="arn:aws:s3:::$OPSAI_BUCKET"
+
+  echo "Data Source name: $DATA_SOURCE_NAME"
+  echo "Data Source ID: $DATA_SOURCE_ID"
+  echo "Data Source bucket: $DATA_SOURCE_BUCKET_ARN"
+
+  if [[ "$DATA_SOURCE_BUCKET_ARN" != "$EXPECTED_BUCKET_ARN" ]]; then
+    echo "ERROR: The selected data source uses a different S3 bucket."
+    echo "Expected: $EXPECTED_BUCKET_ARN"
+    echo "Actual:   $DATA_SOURCE_BUCKET_ARN"
     return 1
   fi
 
+  update_env_value() {
+    local KEY="$1"
+    local VALUE="$2"
+
+    if grep -q "^${KEY}=" "$ENV_FILE"; then
+      sed -i \
+        "s|^${KEY}=.*|${KEY}=${VALUE}|" \
+        "$ENV_FILE"
+    else
+      printf '%s=%s\n' \
+        "$KEY" \
+        "$VALUE" \
+        >> "$ENV_FILE"
+    fi
+  }
+
+  update_env_value "AWS_REGION" "$AWS_REGION"
+  update_env_value "AWS_DEFAULT_REGION" "$AWS_DEFAULT_REGION"
+  update_env_value "OPSAI_BUCKET" "$OPSAI_BUCKET"
+  update_env_value "BEDROCK_KB_ID" "$KB_ID"
+  update_env_value "BEDROCK_DATA_SOURCE_ID" "$DATA_SOURCE_ID"
+  update_env_value "BEDROCK_DATA_SOURCE_NAME" "$DATA_SOURCE_NAME"
+
+  chmod 600 "$ENV_FILE"
+
+  export BEDROCK_KB_ID="$KB_ID"
+  export BEDROCK_DATA_SOURCE_ID="$DATA_SOURCE_ID"
+  export BEDROCK_DATA_SOURCE_NAME="$DATA_SOURCE_NAME"
+
+  echo
+  echo "Checking for an ingestion job already in progress..."
+
+  ACTIVE_JOB_ID=$(aws bedrock-agent list-ingestion-jobs \
+    --knowledge-base-id "$KB_ID" \
+    --data-source-id "$DATA_SOURCE_ID" \
+    --region "$AWS_REGION" \
+    --max-results 10 \
+    --query "ingestionJobSummaries[?status=='STARTING' || status=='IN_PROGRESS'].ingestionJobId | [0]" \
+    --output text) || return 1
+
+  if [[ -n "$ACTIVE_JOB_ID" && "$ACTIVE_JOB_ID" != "None" ]]; then
+    INGESTION_JOB_ID="$ACTIVE_JOB_ID"
+
+    echo "An ingestion job is already running."
+    echo "Using existing job: $INGESTION_JOB_ID"
+  else
+    echo "Starting a new ingestion job..."
+
+    INGESTION_JOB_ID=$(aws bedrock-agent start-ingestion-job \
+      --knowledge-base-id "$KB_ID" \
+      --data-source-id "$DATA_SOURCE_ID" \
+      --description "Sync OpsAI approved knowledge documents" \
+      --region "$AWS_REGION" \
+      --query 'ingestionJob.ingestionJobId' \
+      --output text) || return 1
+  fi
+
+  if [[ -z "$INGESTION_JOB_ID" ||
+        "$INGESTION_JOB_ID" == "None" ]]
+  then
+    echo "ERROR: An ingestion job ID was not returned."
+    return 1
+  fi
+
+  update_env_value \
+    "BEDROCK_INGESTION_JOB_ID" \
+    "$INGESTION_JOB_ID"
+
+  export BEDROCK_INGESTION_JOB_ID="$INGESTION_JOB_ID"
+
+  echo
   echo "Ingestion Job ID: $INGESTION_JOB_ID"
-  echo "Waiting for Knowledge Base sync..."
+  echo "Waiting for Knowledge Base synchronization..."
 
   while true
   do
@@ -238,18 +371,18 @@ sync_opsai_knowledge_base() {
       --ingestion-job-id "$INGESTION_JOB_ID" \
       --region "$AWS_REGION" \
       --query 'ingestionJob.status' \
-      --output text)
+      --output text) || return 1
 
     echo "Sync status: $STATUS"
 
     case "$STATUS" in
       COMPLETE)
-        echo "Knowledge Base sync completed successfully."
+        echo "Knowledge Base synchronization completed successfully."
         break
         ;;
 
       FAILED|STOPPED)
-        echo "ERROR: Knowledge Base sync was not successful."
+        echo "ERROR: Knowledge Base synchronization failed."
 
         aws bedrock-agent get-ingestion-job \
           --knowledge-base-id "$KB_ID" \
@@ -266,6 +399,11 @@ sync_opsai_knowledge_base() {
         sleep 10
         ;;
 
+      ""|None)
+        echo "ERROR: The ingestion status could not be retrieved."
+        return 1
+        ;;
+
       *)
         echo "Waiting. Current status: $STATUS"
         sleep 10
@@ -273,19 +411,44 @@ sync_opsai_knowledge_base() {
     esac
   done
 
+  echo
+  echo "Final ingestion result:"
+
   aws bedrock-agent get-ingestion-job \
     --knowledge-base-id "$KB_ID" \
     --data-source-id "$DATA_SOURCE_ID" \
     --ingestion-job-id "$INGESTION_JOB_ID" \
     --region "$AWS_REGION" \
-    --query \
-    'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
-    --output json
+    --query 'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
+    --output json || return 1
+
+  echo
+  echo "Saved OpsAI configuration:"
+  echo "  Bucket: $OPSAI_BUCKET"
+  echo "  Knowledge Base ID: $KB_ID"
+  echo "  Data Source Name: $DATA_SOURCE_NAME"
+  echo "  Data Source ID: $DATA_SOURCE_ID"
+  echo "  Ingestion Job ID: $INGESTION_JOB_ID"
 }
 
+After the function definition finishes and the prompt returns, run:
+
 sync_opsai_knowledge_base
+Expected values for your environment
 
+You should see:
 
+Knowledge Base ID: ORF58CWPHY
+Knowledge Base status: ACTIVE
+Data Source name: knowledge-base-quick-start-y5df8-data-source
+Data Source ID: BRE9U6ZRYC
+
+The final status should be:
+
+Sync status: COMPLETE
+Knowledge Base synchronization completed successfully.
+
+Do not paste the expected-output text into CloudShell. Only paste the command blocks.
 
 
 
