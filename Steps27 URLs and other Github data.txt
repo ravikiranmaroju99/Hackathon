@@ -1,0 +1,10 @@
+Step27 URLs and other Github data
++++++++++++++++++++++++
+
+https://github.com/ravikiranmaroju99/OpsAI 
+
+https://github.com/ravikiranmaroju99/OpsAI.git
+
+gh repo clone ravikiranmaroju99/OpsAI
+
+git@github.com:ravikiranmaroju99/OpsAI.git

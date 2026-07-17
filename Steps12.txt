@@ -1,0 +1,57 @@
+Steps12
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 12A — Get the Agent Alias ID
+
+The application will need both the Agent ID and Alias ID to call the agent.
+
+Open CloudShell as opsai-admin and run:
+
+aws bedrock-agent list-agent-aliases \
+  --agent-id FJ6R3CBW6H \
+  --region us-east-1 \
+  --query 'agentAliasSummaries[].{AliasName:agentAliasName,AliasID:agentAliasId,Status:agentAliasStatus}' \
+  --output table
+
+You should see:
+
+AliasName: opsai-mvp
+AliasID: a 10-character ID
+Status: PREPARED
+
+The command lists the aliases connected to your agent.
+
+Run only this command
+
+____________________________________
+
+
+Step 12B — Save the Configuration
+
+Run this complete block in the current opsai-admin CloudShell:
+
+mkdir -p ~/opsai-assistant-aws/{app,scripts,lambda,schemas,data,docs,reports}
+
+cd ~/opsai-assistant-aws
+
+cat > .env <<'EOF'
+AWS_REGION=us-east-1
+AWS_DEFAULT_REGION=us-east-1
+OPSAI_BUCKET=opsai-assistant-kb-845482522818-us-east-1
+BEDROCK_AGENT_ID=FJ6R3CBW6H
+BEDROCK_AGENT_ALIAS_ID=LRVAF80EAC
+EOF
+
+chmod 600 .env
+source .env
+
+echo "Region: $AWS_REGION"
+echo "Bucket: $OPSAI_BUCKET"
+echo "Agent ID: $BEDROCK_AGENT_ID"
+echo "Alias ID: $BEDROCK_AGENT_ALIAS_ID"
+Expected output
+Region: us-east-1
+Bucket: opsai-assistant-kb-845482522818-us-east-1
+Agent ID: FJ6R3CBW6H
+Alias ID: LRVAF80EAC
+
+Complete only this step

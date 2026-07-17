@@ -1,0 +1,46 @@
+Steps2
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 2 — Verify Bedrock Model Access
+
+AWS now enables most Bedrock foundation models automatically. Anthropic Claude may still ask for use-case details for first-time access.
+
+For the MVP, we will first use:
+
+Main AI model: Amazon Nova Lite
+Knowledge embedding model: Amazon Titan Text Embeddings V2
+2.1 Open Amazon Bedrock
+In the AWS Console search bar, type:
+Amazon Bedrock
+Open Amazon Bedrock.
+Confirm the Region remains:
+US East (N. Virginia) — us-east-1
+2.2 Test Amazon Nova Lite
+From the left menu, select Model catalog.
+Search for:
+Amazon Nova Lite
+Open the model.
+Select Open in playground or Try in playground.
+Enter this prompt:
+Reply with exactly: OpsAI Assistant model access is working.
+Select Run.
+Expected answer
+OpsAI Assistant model access is working.
+2.3 Confirm the Embedding Model
+
+Return to Model catalog and search for:
+
+Titan Text Embeddings V2
+
+Confirm that you can open its model page. The model ID should normally appear as:
+
+amazon.titan-embed-text-v2:0
+
+We will use this model later to convert your SOPs, runbooks and operational documents into searchable embeddings.
+
+Step 2 completion requirement
+
+Step 2 passes when:
+
+Nova Lite provides a response in the playground.
+Titan Text Embeddings V2 is visible in the Model Catalog.
+No AccessDenied message appears.

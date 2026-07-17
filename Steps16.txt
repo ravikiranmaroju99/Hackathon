@@ -1,0 +1,1387 @@
+Steps16
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 16A — Create the Chatbot Web UI
+
+This creates a browser interface with:
+
+New Chat
+Conversation history
+Suggested questions
+User and assistant message bubbles
+Session continuity
+Mobile-friendly layout
+
+Run this complete block:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+mkdir -p app/web
+
+cat > app/web/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+    <meta
+        name="description"
+        content="OpsAI Assistant for enterprise IT operations support"
+    >
+    <title>OpsAI Assistant</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="application">
+        <aside class="sidebar" id="sidebar">
+            <div class="brand">
+                <div class="brand-icon">O</div>
+
+                <div>
+                    <h1>OpsAI</h1>
+                    <p>Assistant</p>
+                </div>
+            </div>
+
+            <button class="new-chat-button" id="new-chat-button">
+                <span>＋</span>
+                New Chat
+            </button>
+
+            <div class="history-header">
+                <span>Chat history</span>
+
+                <button
+                    id="clear-history-button"
+                    class="icon-button"
+                    title="Clear chat history"
+                    aria-label="Clear chat history"
+                >
+                    🗑
+                </button>
+            </div>
+
+            <div class="conversation-list" id="conversation-list"></div>
+
+            <div class="sidebar-footer">
+                <div class="status-row">
+                    <span class="status-dot"></span>
+                    OpsAI online
+                </div>
+
+                <p>Powered by AWS Bedrock</p>
+            </div>
+        </aside>
+
+        <main class="chat-area">
+            <header class="top-header">
+                <button
+                    class="mobile-menu-button"
+                    id="mobile-menu-button"
+                    aria-label="Open navigation"
+                >
+                    ☰
+                </button>
+
+                <div>
+                    <h2>OpsAI Assistant</h2>
+                    <p>Enterprise IT Operations Support</p>
+                </div>
+
+                <div class="environment-badge">AWS MVP</div>
+            </header>
+
+            <section class="messages" id="messages">
+                <div class="welcome-card" id="welcome-card">
+                    <div class="assistant-avatar large-avatar">O</div>
+
+                    <h2>Hello, I am OpsAI Assistant</h2>
+
+                    <p>
+                        Ask questions about Kubernetes, RKE2, Jenkins,
+                        cloud and infrastructure operations.
+                    </p>
+
+                    <div class="suggestion-grid">
+                        <button class="suggestion">
+                            What should I check when a Kubernetes node
+                            becomes unavailable?
+                        </button>
+
+                        <button class="suggestion">
+                            How do I troubleshoot Kubernetes DiskPressure?
+                        </button>
+
+                        <button class="suggestion">
+                            What should I check when a Jenkins pipeline fails?
+                        </button>
+                    </div>
+
+                    <div class="approval-notice">
+                        Production changes, reboots and deletions require
+                        human approval.
+                    </div>
+                </div>
+            </section>
+
+            <footer class="composer-area">
+                <form id="chat-form" class="composer">
+                    <textarea
+                        id="message-input"
+                        rows="1"
+                        maxlength="4000"
+                        placeholder="Ask OpsAI Assistant..."
+                        aria-label="Message"
+                    ></textarea>
+
+                    <button
+                        id="send-button"
+                        type="submit"
+                        aria-label="Send message"
+                    >
+                        ➤
+                    </button>
+                </form>
+
+                <p class="composer-note">
+                    OpsAI can make mistakes. Validate commands before
+                    running them in production.
+                </p>
+            </footer>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+EOF
+
+cat > app/web/styles.css <<'EOF'
+:root {
+    --primary: #132a4f;
+    --primary-light: #1f4d82;
+    --accent: #3b82f6;
+    --background: #f5f7fb;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #172033;
+    --muted: #64748b;
+    --assistant-message: #ffffff;
+    --user-message: #dcecff;
+    --success: #16a34a;
+    --shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text);
+    background: var(--background);
+}
+
+button,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.application {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.sidebar {
+    width: 270px;
+    display: flex;
+    flex-direction: column;
+    padding: 22px 16px;
+    background: var(--primary);
+    color: white;
+    transition: transform 0.2s ease;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 8px 24px;
+}
+
+.brand-icon,
+.assistant-avatar {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #60a5fa, #2563eb);
+    color: white;
+    font-weight: 800;
+}
+
+.brand h1,
+.brand p {
+    margin: 0;
+}
+
+.brand h1 {
+    font-size: 18px;
+}
+
+.brand p {
+    color: #bfdbfe;
+    font-size: 13px;
+}
+
+.new-chat-button {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    text-align: left;
+}
+
+.new-chat-button:hover {
+    background: rgba(255, 255, 255, 0.17);
+}
+
+.history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 24px;
+    padding: 0 6px 8px;
+    color: #bfdbfe;
+    font-size: 12px;
+    text-transform: uppercase;
+}
+
+.icon-button {
+    border: 0;
+    background: transparent;
+    color: inherit;
+}
+
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.conversation-item {
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 11px 12px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #dbeafe;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversation-item:hover,
+.conversation-item.active {
+    background: rgba(255, 255, 255, 0.13);
+    color: white;
+}
+
+.sidebar-footer {
+    padding: 16px 6px 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    color: #bfdbfe;
+    font-size: 12px;
+}
+
+.sidebar-footer p {
+    margin-bottom: 0;
+}
+
+.status-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+}
+
+.chat-area {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.top-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    min-height: 74px;
+    padding: 12px 26px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.top-header h2,
+.top-header p {
+    margin: 0;
+}
+
+.top-header h2 {
+    font-size: 17px;
+}
+
+.top-header p {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.environment-badge {
+    margin-left: auto;
+    padding: 6px 10px;
+    border-radius: 20px;
+    background: #e8f1ff;
+    color: #1d4ed8;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.mobile-menu-button {
+    display: none;
+    border: 0;
+    background: transparent;
+    font-size: 22px;
+}
+
+.messages {
+    flex: 1;
+    padding: 28px max(24px, calc((100% - 900px) / 2));
+    overflow-y: auto;
+}
+
+.welcome-card {
+    max-width: 680px;
+    margin: 7vh auto 0;
+    padding: 34px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    text-align: center;
+}
+
+.large-avatar {
+    width: 54px;
+    height: 54px;
+    margin: auto;
+    border-radius: 16px;
+    font-size: 22px;
+}
+
+.welcome-card h2 {
+    margin: 18px 0 8px;
+}
+
+.welcome-card > p {
+    margin: 0 auto 24px;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.suggestion-grid {
+    display: grid;
+    gap: 9px;
+}
+
+.suggestion {
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #f8fafc;
+    color: var(--text);
+    text-align: left;
+}
+
+.suggestion:hover {
+    border-color: #93c5fd;
+    background: #eff6ff;
+}
+
+.approval-notice {
+    margin-top: 20px;
+    padding: 11px;
+    border-radius: 9px;
+    background: #fff7ed;
+    color: #9a3412;
+    font-size: 12px;
+}
+
+.message-row {
+    display: flex;
+    gap: 12px;
+    max-width: 900px;
+    margin: 0 auto 20px;
+}
+
+.message-row.user {
+    justify-content: flex-end;
+}
+
+.message-bubble {
+    max-width: min(760px, 82%);
+    padding: 14px 17px;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--assistant-message);
+    box-shadow: 0 3px 14px rgba(15, 23, 42, 0.04);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.message-row.user .message-bubble {
+    border-color: #bfdbfe;
+    background: var(--user-message);
+}
+
+.message-meta {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.typing {
+    color: var(--muted);
+}
+
+.composer-area {
+    padding: 14px max(20px, calc((100% - 900px) / 2)) 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.composer {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 8px 8px 8px 15px;
+    border: 1px solid #cbd5e1;
+    border-radius: 14px;
+    background: white;
+    box-shadow: 0 3px 12px rgba(15, 23, 42, 0.05);
+}
+
+.composer:focus-within {
+    border-color: var(--accent);
+}
+
+.composer textarea {
+    flex: 1;
+    max-height: 150px;
+    resize: none;
+    border: 0;
+    outline: 0;
+    line-height: 1.5;
+}
+
+.composer button {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    border-radius: 11px;
+    background: var(--accent);
+    color: white;
+}
+
+.composer button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.composer-note {
+    margin: 7px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+}
+
+@media (max-width: 760px) {
+    .sidebar {
+        position: fixed;
+        z-index: 10;
+        inset: 0 auto 0 0;
+        transform: translateX(-100%);
+    }
+
+    .sidebar.open {
+        transform: translateX(0);
+    }
+
+    .mobile-menu-button {
+        display: inline-block;
+    }
+
+    .top-header {
+        padding: 12px 16px;
+    }
+
+    .messages {
+        padding: 20px 14px;
+    }
+
+    .welcome-card {
+        margin-top: 2vh;
+        padding: 22px;
+    }
+
+    .composer-area {
+        padding: 10px 12px;
+    }
+
+    .message-bubble {
+        max-width: 90%;
+    }
+}
+EOF
+
+cat > app/web/app.js <<'EOF'
+const API_URL = "__API_URL__";
+const STORAGE_KEY = "opsai-conversations-v1";
+
+const messagesElement = document.getElementById("messages");
+const conversationList = document.getElementById("conversation-list");
+const form = document.getElementById("chat-form");
+const input = document.getElementById("message-input");
+const sendButton = document.getElementById("send-button");
+const newChatButton = document.getElementById("new-chat-button");
+const clearHistoryButton = document.getElementById("clear-history-button");
+const sidebar = document.getElementById("sidebar");
+const mobileMenuButton = document.getElementById("mobile-menu-button");
+
+let conversations = loadConversations();
+let activeConversationId = null;
+let isSending = false;
+
+function createId(prefix = "id") {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function loadConversations() {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+        console.error("Unable to read chat history:", error);
+        return [];
+    }
+}
+
+function saveConversations() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+}
+
+function getActiveConversation() {
+    return conversations.find(
+        conversation => conversation.id === activeConversationId
+    );
+}
+
+function createConversation() {
+    const conversation = {
+        id: createId("chat"),
+        sessionId: createId("session"),
+        title: "New conversation",
+        messages: [],
+        updatedAt: Date.now()
+    };
+
+    conversations.unshift(conversation);
+    activeConversationId = conversation.id;
+    saveConversations();
+    renderAll();
+}
+
+function setConversationTitle(conversation, question) {
+    if (conversation.messages.length === 1) {
+        conversation.title =
+            question.length > 42
+                ? `${question.slice(0, 42)}...`
+                : question;
+    }
+}
+
+function renderConversationList() {
+    conversationList.innerHTML = "";
+
+    conversations.forEach(conversation => {
+        const button = document.createElement("button");
+        button.className = "conversation-item";
+        button.textContent = conversation.title;
+
+        if (conversation.id === activeConversationId) {
+            button.classList.add("active");
+        }
+
+        button.addEventListener("click", () => {
+            activeConversationId = conversation.id;
+            renderAll();
+            sidebar.classList.remove("open");
+        });
+
+        conversationList.appendChild(button);
+    });
+}
+
+function renderWelcome() {
+    messagesElement.innerHTML = `
+        <div class="welcome-card">
+            <div class="assistant-avatar large-avatar">O</div>
+            <h2>Hello, I am OpsAI Assistant</h2>
+            <p>
+                Ask questions about Kubernetes, RKE2, Jenkins,
+                cloud and infrastructure operations.
+            </p>
+            <div class="suggestion-grid">
+                <button class="suggestion">
+                    What should I check when a Kubernetes node becomes unavailable?
+                </button>
+                <button class="suggestion">
+                    How do I troubleshoot Kubernetes DiskPressure?
+                </button>
+                <button class="suggestion">
+                    What should I check when a Jenkins pipeline fails?
+                </button>
+            </div>
+            <div class="approval-notice">
+                Production changes, reboots and deletions require human approval.
+            </div>
+        </div>
+    `;
+
+    bindSuggestionButtons();
+}
+
+function addMessageElement(message) {
+    const row = document.createElement("div");
+    row.className = `message-row ${message.role}`;
+
+    if (message.role === "assistant") {
+        const avatar = document.createElement("div");
+        avatar.className = "assistant-avatar";
+        avatar.textContent = "O";
+        row.appendChild(avatar);
+    }
+
+    const bubble = document.createElement("div");
+    bubble.className = "message-bubble";
+
+    const content = document.createElement("div");
+    content.textContent = message.content;
+    bubble.appendChild(content);
+
+    const meta = document.createElement("div");
+    meta.className = "message-meta";
+    meta.textContent =
+        message.role === "assistant"
+            ? "OpsAI Assistant"
+            : "You";
+
+    bubble.appendChild(meta);
+    row.appendChild(bubble);
+    messagesElement.appendChild(row);
+}
+
+function renderMessages() {
+    const conversation = getActiveConversation();
+
+    if (!conversation || conversation.messages.length === 0) {
+        renderWelcome();
+        return;
+    }
+
+    messagesElement.innerHTML = "";
+    conversation.messages.forEach(addMessageElement);
+    scrollToBottom();
+}
+
+function renderAll() {
+    renderConversationList();
+    renderMessages();
+}
+
+function scrollToBottom() {
+    messagesElement.scrollTop = messagesElement.scrollHeight;
+}
+
+function showTyping() {
+    const row = document.createElement("div");
+    row.id = "typing-row";
+    row.className = "message-row assistant";
+
+    row.innerHTML = `
+        <div class="assistant-avatar">O</div>
+        <div class="message-bubble typing">
+            OpsAI Assistant is checking the approved runbooks...
+        </div>
+    `;
+
+    messagesElement.appendChild(row);
+    scrollToBottom();
+}
+
+function removeTyping() {
+    document.getElementById("typing-row")?.remove();
+}
+
+async function sendMessage(question) {
+    const cleanedQuestion = question.trim();
+
+    if (!cleanedQuestion || isSending) {
+        return;
+    }
+
+    if (!activeConversationId) {
+        createConversation();
+    }
+
+    const conversation = getActiveConversation();
+
+    conversation.messages.push({
+        role: "user",
+        content: cleanedQuestion
+    });
+
+    setConversationTitle(conversation, cleanedQuestion);
+    conversation.updatedAt = Date.now();
+
+    saveConversations();
+    renderAll();
+
+    input.value = "";
+    resizeInput();
+
+    isSending = true;
+    sendButton.disabled = true;
+    showTyping();
+
+    try {
+        const response = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                question: cleanedQuestion,
+                sessionId: conversation.sessionId
+            })
+        });
+
+        let result;
+
+        try {
+            result = await response.json();
+        } catch {
+            throw new Error("The backend returned an invalid response.");
+        }
+
+        if (!response.ok) {
+            throw new Error(
+                result.error || `Request failed with status ${response.status}`
+            );
+        }
+
+        conversation.sessionId =
+            result.sessionId || conversation.sessionId;
+
+        conversation.messages.push({
+            role: "assistant",
+            content: result.answer || "No answer was returned."
+        });
+    } catch (error) {
+        console.error(error);
+
+        conversation.messages.push({
+            role: "assistant",
+            content:
+                "I could not connect to the OpsAI backend. " +
+                "Please try again or contact the platform administrator."
+        });
+    } finally {
+        removeTyping();
+        conversation.updatedAt = Date.now();
+        saveConversations();
+
+        isSending = false;
+        sendButton.disabled = false;
+
+        renderAll();
+        input.focus();
+    }
+}
+
+function bindSuggestionButtons() {
+    document.querySelectorAll(".suggestion").forEach(button => {
+        button.addEventListener("click", () => {
+            sendMessage(button.textContent.trim());
+        });
+    });
+}
+
+function resizeInput() {
+    input.style.height = "auto";
+    input.style.height = `${Math.min(input.scrollHeight, 150)}px`;
+}
+
+form.addEventListener("submit", event => {
+    event.preventDefault();
+    sendMessage(input.value);
+});
+
+input.addEventListener("input", resizeInput);
+
+input.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        form.requestSubmit();
+    }
+});
+
+newChatButton.addEventListener("click", () => {
+    createConversation();
+    sidebar.classList.remove("open");
+    input.focus();
+});
+
+clearHistoryButton.addEventListener("click", () => {
+    if (!window.confirm("Delete all saved chat history?")) {
+        return;
+    }
+
+    conversations = [];
+    activeConversationId = null;
+    saveConversations();
+    createConversation();
+});
+
+mobileMenuButton.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+});
+
+if (conversations.length === 0) {
+    createConversation();
+} else {
+    activeConversationId = conversations[0].id;
+    renderAll();
+}
+
+input.focus();
+EOF
+
+# Add the real API URL without exposing any secret credentials
+sed -i \
+  "s|__API_URL__|$OPSAI_API_URL|g" \
+  app/web/app.js
+
+echo "Frontend files created:"
+find app/web -maxdepth 1 -type f -printf '%f\n' | sort
+
+echo
+echo "API configured in frontend:"
+grep 'const API_URL' app/web/app.js
+
+Expected output:
+
+app.js
+index.html
+styles.css
+
+const API_URL = "https://...execute-api.us-east-1.amazonaws.com/chat";
+
+The frontend calls the HTTP API from a different website origin, which is why the CORS settings you validated are required.
+
+Step 16B — Create the Amplify Hosting Application
+
+Amplify static applications use platform type WEB. We will create a manually deployed application without connecting GitHub.
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+AMPLIFY_APP_NAME="opsai-assistant-ui"
+AMPLIFY_BRANCH_NAME="main"
+
+# Create a ZIP with index.html at the root
+rm -f app/opsai-assistant-ui.zip
+
+cd app/web
+zip -qr ../opsai-assistant-ui.zip .
+cd ../..
+
+echo "Frontend deployment package:"
+unzip -l app/opsai-assistant-ui.zip
+
+# Find an existing Amplify application
+AMPLIFY_APP_ID=$(aws amplify list-apps \
+  --region "$AWS_REGION" \
+  --query "apps[?name=='$AMPLIFY_APP_NAME'].appId | [0]" \
+  --output text)
+
+# Create the application when it does not exist
+if [[ -z "$AMPLIFY_APP_ID" || "$AMPLIFY_APP_ID" == "None" ]]; then
+    echo "Creating Amplify application..."
+
+    AMPLIFY_APP_ID=$(aws amplify create-app \
+      --name "$AMPLIFY_APP_NAME" \
+      --description \
+      "Browser interface for the OpsAI Assistant AWS MVP" \
+      --platform WEB \
+      --no-enable-branch-auto-build \
+      --region "$AWS_REGION" \
+      --query 'app.appId' \
+      --output text)
+else
+    echo "Using existing Amplify application: $AMPLIFY_APP_ID"
+fi
+
+# Check whether the main branch exists
+if ! aws amplify get-branch \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" >/dev/null 2>&1
+then
+    echo "Creating Amplify main branch..."
+
+    aws amplify create-branch \
+      --app-id "$AMPLIFY_APP_ID" \
+      --branch-name "$AMPLIFY_BRANCH_NAME" \
+      --description "OpsAI MVP production branch" \
+      --stage PRODUCTION \
+      --framework "Web" \
+      --no-enable-auto-build \
+      --region "$AWS_REGION" \
+      >/dev/null
+else
+    echo "Amplify main branch already exists."
+fi
+
+DEFAULT_DOMAIN=$(aws amplify get-app \
+  --app-id "$AMPLIFY_APP_ID" \
+  --region "$AWS_REGION" \
+  --query 'app.defaultDomain' \
+  --output text)
+
+AMPLIFY_URL="https://${AMPLIFY_BRANCH_NAME}.${DEFAULT_DOMAIN}"
+
+if grep -q '^AMPLIFY_APP_ID=' .env; then
+    sed -i \
+      "s/^AMPLIFY_APP_ID=.*/AMPLIFY_APP_ID=$AMPLIFY_APP_ID/" \
+      .env
+else
+    echo "AMPLIFY_APP_ID=$AMPLIFY_APP_ID" >> .env
+fi
+
+if grep -q '^AMPLIFY_BRANCH_NAME=' .env; then
+    sed -i \
+      "s/^AMPLIFY_BRANCH_NAME=.*/AMPLIFY_BRANCH_NAME=$AMPLIFY_BRANCH_NAME/" \
+      .env
+else
+    echo "AMPLIFY_BRANCH_NAME=$AMPLIFY_BRANCH_NAME" >> .env
+fi
+
+if grep -q '^AMPLIFY_URL=' .env; then
+    sed -i \
+      "s|^AMPLIFY_URL=.*|AMPLIFY_URL=$AMPLIFY_URL|" \
+      .env
+else
+    echo "AMPLIFY_URL=$AMPLIFY_URL" >> .env
+fi
+
+echo
+echo "Amplify App ID: $AMPLIFY_APP_ID"
+echo "Branch: $AMPLIFY_BRANCH_NAME"
+echo "Planned website URL: $AMPLIFY_URL"
+Step 16C — Deploy the Chatbot UI
+
+For a manual Amplify deployment, create-deployment returns a ZIP upload URL and a job ID. After uploading the ZIP, start-deployment starts the hosting job.
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+echo "Deployment job ID: $JOB_ID"
+echo "Uploading frontend package..."
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+echo
+echo "Starting Amplify deployment..."
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+echo "Waiting for deployment to complete..."
+
+while true
+do
+    DEPLOYMENT_STATUS=$(aws amplify get-job \
+      --app-id "$AMPLIFY_APP_ID" \
+      --branch-name "$AMPLIFY_BRANCH_NAME" \
+      --job-id "$JOB_ID" \
+      --region "$AWS_REGION" \
+      --query 'job.summary.status' \
+      --output text)
+
+    echo "Deployment status: $DEPLOYMENT_STATUS"
+
+    case "$DEPLOYMENT_STATUS" in
+        SUCCEED)
+            break
+            ;;
+        FAILED|CANCELLED)
+            echo "Amplify deployment failed."
+            exit 1
+            ;;
+        *)
+            sleep 10
+            ;;
+    esac
+done
+
+echo
+echo "OpsAI chatbot URL:"
+echo "$AMPLIFY_URL"
+
+Amplify Hosting publishes static sites through its CDN and provides HTTPS hosting.
+
+Final validation
+
+After the deployment shows SUCCEED, open the URL displayed by the command.
+
+Test:
+
+What should I check when a Kubernetes node becomes unavailable?
+
+You should see the answer inside the browser-based chatbot page
+
+____________________________________
+
+Step 16D — Update CGI Branding
+
+Run this in CloudShell:
+
+cd ~/opsai-assistant-aws
+
+# Replace the existing footer text
+sed -i \
+  's|<p>Powered by AWS Bedrock</p>|<p class="cgi-powered">Powered by CGI</p>|' \
+  app/web/index.html
+
+# Add bold red CGI styling
+cat >> app/web/styles.css <<'EOF'
+
+.cgi-powered {
+    margin-top: 10px;
+    color: #ff0000;
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+}
+EOF
+
+# Verify the change
+grep -n "Powered by CGI" app/web/index.html
+tail -n 10 app/web/styles.css
+Step 16E — Redeploy the Updated UI
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+# Rebuild the frontend ZIP
+rm -f app/opsai-assistant-ui.zip
+
+cd app/web
+zip -qr ../opsai-assistant-ui.zip .
+cd ../..
+
+# Create a new Amplify deployment
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+# Upload the updated UI
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+# Start deployment
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+echo "Waiting for deployment..."
+
+while true
+do
+  STATUS=$(aws amplify get-job \
+    --app-id "$AMPLIFY_APP_ID" \
+    --branch-name "$AMPLIFY_BRANCH_NAME" \
+    --job-id "$JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'job.summary.status' \
+    --output text)
+
+  echo "Deployment status: $STATUS"
+
+  case "$STATUS" in
+    SUCCEED)
+      break
+      ;;
+    FAILED|CANCELLED)
+      echo "Deployment failed."
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+echo
+echo "Updated OpsAI URL:"
+echo "$AMPLIFY_URL"
+
+After it shows SUCCEED, refresh the browser using Ctrl + F5. The bottom-left corner will show:
+
+Powered by CGI
+
+in bold red text.
+
+________________________________________
+
+Add the creator and contact details below Powered by CGI in the bottom-left corner.
+
+Step 16F — Add Creator and Contact Details
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+python3 - <<'PY'
+from pathlib import Path
+
+html_file = Path("app/web/index.html")
+html = html_file.read_text(encoding="utf-8")
+
+old_content = '<p class="cgi-powered">Powered by CGI</p>'
+
+new_content = '''<p class="cgi-powered">Powered by CGI</p>
+
+                <div class="creator-information">
+                    <p>
+                        Created by
+                        <strong>Ravi Kiran Maroju</strong>
+                    </p>
+
+                    <p>
+                        For suggestions or concerns, reach out to
+                        <a href="mailto:ravi.maroju@cgi.com">
+                            ravi.maroju@cgi.com
+                        </a>
+                    </p>
+                </div>'''
+
+if new_content in html:
+    print("Creator information is already present.")
+elif old_content in html:
+    html = html.replace(old_content, new_content)
+    html_file.write_text(html, encoding="utf-8")
+    print("Creator information added successfully.")
+else:
+    raise SystemExit("Unable to find the Powered by CGI footer.")
+PY
+
+cat >> app/web/styles.css <<'EOF'
+
+.creator-information {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    color: #dbeafe;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.creator-information p {
+    margin: 5px 0;
+}
+
+.creator-information strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.creator-information a {
+    color: #93c5fd;
+    font-weight: 600;
+    text-decoration: none;
+    word-break: break-word;
+}
+
+.creator-information a:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+EOF
+
+grep -n -A15 "Powered by CGI" app/web/index.html
+
+It will display:
+
+Powered by CGI
+
+Created by Ravi Kiran Maroju
+
+For suggestions or concerns, reach out to
+ravi.maroju@cgi.com
+
+The email address will also be clickable.
+
+Step 16G — Redeploy the Updated UI
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+rm -f app/opsai-assistant-ui.zip
+
+cd app/web
+zip -qr ../opsai-assistant-ui.zip .
+cd ../..
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+while true
+do
+  STATUS=$(aws amplify get-job \
+    --app-id "$AMPLIFY_APP_ID" \
+    --branch-name "$AMPLIFY_BRANCH_NAME" \
+    --job-id "$JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'job.summary.status' \
+    --output text)
+
+  echo "Deployment status: $STATUS"
+
+  case "$STATUS" in
+    SUCCEED)
+      break
+      ;;
+    FAILED|CANCELLED)
+      echo "Deployment failed."
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+echo "Updated OpsAI URL: $AMPLIFY_URL"
+
+After SUCCEED, open the URL and press Ctrl + F5 to load the updated design.

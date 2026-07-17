@@ -1,0 +1,84 @@
+Steps1
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+1. Sign in to AWS
+
+Open the AWS Management Console and sign in using your company IAM/SSO account.
+
+Do not use the AWS root account for this project.
+
+2. Select the AWS Region
+
+At the top-right corner of the AWS Console, select the Region provided by the hackathon team.
+
+When no Region was provided, use:
+
+US East (N. Virginia)
+us-east-1
+
+We will create all OpsAI resources in the same Region. Bedrock model availability can differ between Regions.
+
+3. Open AWS CloudShell
+
+At the top of the AWS Console, click the CloudShell icon:
+
+>_
+
+CloudShell already contains AWS CLI version 2 and automatically uses your AWS Console permissions. You do not need to create or enter AWS access keys.
+
+4. Run These Commands
+
+Copy and run this complete block in CloudShell:
+
+# Set our project Region
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
+
+# Check AWS CLI
+aws --version
+
+# Check which AWS account and role you are using
+aws sts get-caller-identity
+
+# Confirm the selected Region
+echo "AWS Region: $AWS_REGION"
+
+# Check Amazon Bedrock access
+aws bedrock list-foundation-models \
+  --region "$AWS_REGION" \
+  --query 'modelSummaries[0:5].[modelName,providerName]' \
+  --output table
+
+# Check S3 access
+aws s3api list-buckets \
+  --query 'Buckets[0:5].Name' \
+  --output table
+
+# Check Lambda access
+aws lambda list-functions \
+  --region "$AWS_REGION" \
+  --max-items 5 \
+  --query 'Functions[].FunctionName' \
+  --output table
+
+# Check CloudWatch Logs access
+aws logs describe-log-groups \
+  --region "$AWS_REGION" \
+  --limit 5 \
+  --query 'logGroups[].logGroupName' \
+  --output table
+
+# Check Bedrock Knowledge Base access
+aws bedrock-agent list-knowledge-bases \
+  --region "$AWS_REGION" \
+  --max-results 5 \
+  --query 'knowledgeBaseSummaries[].name' \
+  --output table
+
+The aws sts get-caller-identity command shows the AWS user or role currently being used.
+
+Expected Result
+
+It is okay when some tables are empty because we have not created resources yet.
+
+The important result is:
+No AccessDenied errors

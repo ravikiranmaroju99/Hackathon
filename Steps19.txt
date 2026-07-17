@@ -1,0 +1,70 @@
+Steps19
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 19A — Test DiskPressure Retrieval Directly
+
+Run this in CloudShell:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+KB_ID=$(aws bedrock-agent list-knowledge-bases \
+  --region "$AWS_REGION" \
+  --query "knowledgeBaseSummaries[?name=='opsai-assistant-kb'].knowledgeBaseId | [0]" \
+  --output text)
+
+echo "Knowledge Base ID: $KB_ID"
+
+aws bedrock-agent-runtime retrieve \
+  --knowledge-base-id "$KB_ID" \
+  --retrieval-query \
+  '{"text":"How do I troubleshoot Kubernetes DiskPressure and what commands should I run?"}' \
+  --retrieval-configuration \
+  '{"vectorSearchConfiguration":{"numberOfResults":10}}' \
+  --region "$AWS_REGION" \
+  --query 'retrievalResults[].{
+    Score:score,
+    Source:location.s3Location.uri,
+    Text:content.text
+  }' \
+  --output json \
+  > diskpressure-retrieval.json
+
+python3 - <<'PY'
+import json
+
+with open("diskpressure-retrieval.json", encoding="utf-8") as file:
+    results = json.load(file)
+
+print(f"Retrieved results: {len(results)}")
+print()
+
+for number, result in enumerate(results, start=1):
+    print(f"Result {number}")
+    print(f"Score : {result.get('Score')}")
+    print(f"Source: {result.get('Source')}")
+    print(f"Text  : {str(result.get('Text', ''))[:500]}")
+    print("-" * 80)
+PY
+Correct result
+
+At least one source should contain:
+
+disk-pressure-runbook.md
+
+and text such as:
+
+df -h
+df -i
+kubectl describe node NODE_NAME
+DiskPressure condition should show False
+Also do this quick UI test
+
+Click New Chat before asking:
+
+According to the Kubernetes Disk Pressure Runbook, what commands should I run to diagnose DiskPressure?
+
+Using a new chat prevents an earlier topic from influencing the current session.
+

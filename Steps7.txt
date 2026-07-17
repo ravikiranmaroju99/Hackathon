@@ -1,0 +1,17 @@
+Steps7
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 7 — Sync the Runbook Documents
+Click the Knowledge Base name:
+opsai-assistant-kb
+Find the Data source section.
+Select the checkbox beside:
+opsai-runbooks-s3
+Click:
+Sync
+Confirm by clicking Sync again if AWS asks.
+
+AWS will now read the three Markdown runbooks from S3, divide them into searchable sections, create embeddings, and store them in the S3 vector index.
+
+Wait until the sync status becomes:
+
+Completed

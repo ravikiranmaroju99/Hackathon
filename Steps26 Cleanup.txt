@@ -1,0 +1,375 @@
+Step26
+++++++++++++++++++++++++++++++++++++
+Cleanup steps 
+
+Complete OpsAI AWS Cleanup
+
+Run this only after your demo is finished. The cleanup permanently deletes the chatbot URL, backend, Knowledge Base, runbooks, vector data, logs and IAM service roles.
+
+
+cleanup_opsai_aws.sh
+
+
+The deletion order matters:
+
+
+
+
+Bedrock Agent aliases should be removed before deleting the Agent.
+
+
+The Knowledge Base must no longer be associated with the Agent before deletion.
+
+
+An S3 vector index must be deleted before its vector bucket.
+
+
+Because your S3 knowledge bucket has versioning enabled, all object versions and delete markers must be removed before deleting the bucket. 
+
+
+Step 1 — Upload the Script to CloudShell
+
+
+
+Sign in as opsai-admin.
+
+
+Open AWS CloudShell in us-east-1.
+
+
+Click Actions.
+
+
+Select Upload file.
+
+
+Upload:
+
+
+cleanup_opsai_aws.sh
+
+Step 2 — Check the Script
+
+Run:
+
+
+chmod +x ~/cleanup_opsai_aws.sh
+
+bash -n ~/cleanup_opsai_aws.sh
+
+No output from bash -n means the syntax is correct.
+
+
+Step 3 — Run the Complete Cleanup
+
+bash ~/cleanup_opsai_aws.sh
+
+The script displays the AWS account ID and asks for confirmation similar to:
+
+
+Type DELETE-OPSAI-845482522818 to continue:
+
+Enter the exact confirmation shown on your screen.
+
+
+Resources Deleted by the Script
+
+The script dynamically finds and deletes:
+
+
+Amplify app:
+opsai-assistant-ui
+
+API Gateway:
+opsai-assistant-http-api
+
+Lambda function:
+opsai-assistant-api
+
+CloudWatch log group:
+/aws/lambda/opsai-assistant-api
+
+Bedrock Agent:
+opsai-assistant-agent
+
+Agent alias:
+opsai-mvp
+
+Bedrock Knowledge Base:
+opsai-assistant-kb
+
+Knowledge Base data source:
+opsai-runbooks-s3
+
+S3 Vector index
+S3 Vector bucket
+
+S3 knowledge bucket:
+opsai-assistant-kb-<account-id>-us-east-1
+
+Lambda execution role:
+OpsAILambdaExecutionRole
+
+Bedrock Agent service role
+Bedrock Knowledge Base service role
+
+Deleting an Amplify app removes the Amplify application, deleting an API Gateway API removes the API resource, and deleting a Lambda function without specifying a version removes the function and its versions and aliases. 
+
+
+Step 4 — Review the Result
+
+At the end, you should see results similar to:
+
+
+Amplify app count: 0
+API Gateway API count: 0
+Lambda function: Deleted
+Bedrock agent count: 0
+Knowledge Base count: 0
+S3 knowledge bucket: Deleted
+
+The script also creates a cleanup log:
+
+
+~/opsai-cleanup-YYYYMMDD-HHMMSS.log
+
+Review any lines containing:
+
+
+WARNING
+ERROR
+STILL EXISTS
+
+Step 5 — Remove CloudShell Project Files
+
+The script intentionally keeps your local files so you can save your code and documentation first.
+
+
+After taking a backup, remove them with:
+
+
+rm -rf ~/opsai-assistant-aws
+
+Confirm:
+
+
+ls -ld ~/opsai-assistant-aws
+
+Expected result:
+
+
+No such file or directory
+
+Step 6 — Optional: Delete the opsai-admin IAM User
+
+The script does not delete opsai-admin, because deleting the IAM user currently being used could lock you out.
+
+
+Delete it only when:
+
+
+
+
+It was created only for this hackathon.
+
+
+No other project uses it.
+
+
+All AWS cleanup verification has passed.
+
+
+You can sign in through root or another administrator.
+
+
+Sign in through root or another administrator and open:
+
+
+IAM
+→ Users
+→ opsai-admin
+→ Delete
+
+Enter the username when AWS asks for confirmation.
+
+
+Do not delete opsai-admin while you are still signed in only through that account.
+
+
+Final Manual Verification
+
+Run these commands from another administrator session:
+
+
+export AWS_REGION=us-east-1
+
+aws amplify list-apps \
+  --region "$AWS_REGION" \
+  --query "apps[?name=='opsai-assistant-ui']"
+
+aws apigatewayv2 get-apis \
+  --region "$AWS_REGION" \
+  --query "Items[?Name=='opsai-assistant-http-api']"
+
+aws lambda get-function \
+  --function-name opsai-assistant-api \
+  --region "$AWS_REGION"
+
+aws bedrock-agent list-agents \
+  --region "$AWS_REGION" \
+  --query "agentSummaries[?agentName=='opsai-assistant-agent']"
+
+aws bedrock-agent list-knowledge-bases \
+  --region "$AWS_REGION" \
+  --query "knowledgeBaseSummaries[?name=='opsai-assistant-kb']"
+
+The Lambda command should return ResourceNotFoundException. The other commands should return empty results. Deleting the CloudWatch log group separately ensures the Lambda logs are also removed. 
+
+
+Run the cleanup only after saving your screenshots, source package and Steps 1–20 document
+
+
++++++++++++++++++
+
+Your setup is serverless. You do not have an EC2 server or database running continuously. Most services charge only when users ask questions, invoke the API, transfer data, or store files. AWS generally uses pay-as-you-go pricing without long-term commitments.
+
+Expected cost for three days
+
+Assuming:
+
+Only four small Knowledge Base documents
+Amazon Nova Lite
+S3 Vectors
+A small static Amplify website
+No Cognito, WAF or provisioned throughput
+Normal hackathon/demo usage
+Usage for three days Estimated cost before tax Safe budget
+Resources remain idle Less than ₹5 ₹10
+Around 100 chatbot questions ₹5–₹25 ₹50
+Around 500 chatbot questions ₹20–₹100 ₹150
+Around 1,000 chatbot questions ₹40–₹250 ₹300
+
+Therefore, for your hackathon, a sensible estimate is:
+
+Likely cost: below ₹50 for normal demo usage.
+Safe maximum budget: ₹300 for three days.
+
+These are estimates rather than an AWS quotation. They use an exchange rate of approximately ₹96.35 for USD 1; AWS invoice conversion and taxes may make the final amount slightly different.
+
+Where the cost comes from
+1. Amazon Nova Lite
+
+This is likely to be the main cost.
+
+Nova Lite is charged according to:
+
+Number of input tokens
+Retrieved runbook content sent to the model
+Number of output tokens generated
+
+AWS’s published example uses:
+
+Input:  $0.00006 per 1,000 tokens
+Output: $0.00024 per 1,000 tokens
+
+A simple question using approximately 2,000 input tokens and 500 output tokens costs around ₹0.02–₹0.03 for one model call. Bedrock Agents can make more than one model call and use additional context, so budgeting ₹0.03–₹0.20 per question is safer.
+
+2. Titan Text Embeddings V2
+
+Titan converts your documents and questions into searchable vectors.
+
+Its published price is:
+
+$0.00002 per 1,000 input tokens
+
+Because you currently have only four small Markdown documents, the initial document-indexing cost should be extremely small—much less than ₹1.
+
+3. Amazon S3 Vectors
+
+S3 Vectors charges for:
+
+Vector storage: $0.06 per GB per month
+Vector uploads: $0.20 per GB
+Queries:        $2.50 per 1 million queries
+
+Your vector data is very small, so three days of storage and normal demo queries should cost only a few paise.
+
+4. AWS Lambda
+
+Lambda charges for:
+
+Number of requests
+Memory allocated
+Execution time
+
+The monthly free tier includes one million requests and 400,000 GB-seconds. Your 256-MB Lambda running for a few hundred demo questions will usually remain inside this allowance, assuming the account is eligible and has not already consumed it.
+
+5. API Gateway
+
+The HTTP API costs approximately:
+
+$1 for 1 million requests
+
+Even 1,000 chatbot requests would be approximately $0.001, or around ₹0.10 before tax. Eligible accounts may also receive one million HTTP API requests in the monthly free tier.
+
+6. AWS Amplify Hosting
+
+Amplify charges mainly for:
+
+Storage:          $0.023 per GB per month
+Data transferred: $0.15 per GB
+Build minutes:    $0.01 per minute outside the free allowance
+
+Your UI is a small static application deployed manually, so storage and normal hackathon page traffic should be negligible. Amplify has no mandatory monthly minimum for this setup.
+
+7. CloudWatch Logs
+
+CloudWatch charges according to the volume of logs generated and stored. AWS shows log ingestion pricing around $0.50 per GB in US East. A few hundred Lambda executions normally generate only a tiny amount of log data.
+
+Will keeping it idle cost money?
+
+Keeping it available but unused for three days should cost almost nothing.
+
+Small recurring storage charges can remain for:
+
+Amplify application files
+S3 runbook files
+S3 vector data
+CloudWatch logs already stored
+
+Lambda, API Gateway and Nova Lite do not continuously run and charge by the hour in your configuration.
+
+Important things that can increase the cost
+
+Avoid enabling these for the demo:
+
+Bedrock Provisioned Throughput
+AWS WAF on Amplify
+Large Knowledge Base documents
+Very long answers
+Large numbers of automated test questions
+Excessive CloudWatch debug logging
+Multiple unused Amplify applications
+A different, more expensive foundation model
+
+Amplify WAF alone can add $15 per month, before WAF request charges, so leave it disabled for this short demo.
+
+GST
+
+The estimate above is before tax. AWS India billing may include applicable GST depending on the account’s seller of record and tax configuration. AWS documentation for India transactions states that purchases can carry 18% GST.
+
+For example:
+
+₹300 estimated AWS usage
++ 18% GST
+= approximately ₹354
+Recommended action
+
+Create an AWS Budget of:
+
+Budget amount: $5
+Approximately: ₹480 before tax
+
+That is more than sufficient for this three-day MVP and provides a safety alert if something unexpected starts generating costs.
+
+A cleanup reminder after three days would also prevent accidental ongoing storage charges; say “remind me to clean up in three days” to schedule it.

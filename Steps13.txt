@@ -1,0 +1,170 @@
+Steps13
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 13A — Verify Agent and Alias IDs
+Purpose
+
+Confirm the exact deployed Agent ID, Alias ID, alias status and agent version before calling the agent from Python.
+
+Commands
+
+
+cd ~/opsai-assistant-aws
+
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
+
+AGENT_ID=$(aws bedrock-agent list-agents \
+  --region "$AWS_REGION" \
+  --query "agentSummaries[?agentName=='opsai-assistant-agent'].agentId | [0]" \
+  --output text)
+
+ALIAS_ID=$(aws bedrock-agent list-agent-aliases \
+  --agent-id "$AGENT_ID" \
+  --region "$AWS_REGION" \
+  --query "agentAliasSummaries[?agentAliasName=='opsai-mvp'].agentAliasId | [0]" \
+  --output text)
+
+echo "Agent ID: $AGENT_ID"
+echo "Alias ID: $ALIAS_ID"
+
+aws bedrock-agent get-agent-alias \
+  --agent-id "$AGENT_ID" \
+  --agent-alias-id "$ALIAS_ID" \
+  --region "$AWS_REGION" \
+  --query 'agentAlias.{AliasName:agentAliasName,AliasID:agentAliasId,Status:agentAliasStatus,Routing:routingConfiguration}' \
+  --output json
+Verified result
+Agent ID: FJ6R3CBW6H
+Alias ID: LRVAF80EAC
+Alias name: opsai-mvp
+Status: PREPARED
+Agent version: 1
+
+Step 13A Status: Passed ✅
+
+Step 13B — Test the Deployed Agent from Python
+Purpose
+
+Verify that an external application can invoke the deployed OpsAI Assistant agent using the Agent ID and Alias ID.
+
+1. Update the .env file
+
+
+cd ~/opsai-assistant-aws
+
+sed -i "s/^BEDROCK_AGENT_ID=.*/BEDROCK_AGENT_ID=$AGENT_ID/" .env
+
+sed -i "s/^BEDROCK_AGENT_ALIAS_ID=.*/BEDROCK_AGENT_ALIAS_ID=$ALIAS_ID/" .env
+
+set -a
+source .env
+set +a
+
+echo "Agent ID: $BEDROCK_AGENT_ID"
+echo "Alias ID: $BEDROCK_AGENT_ALIAS_ID"
+2. Create the Python test script
+cat > app/test_agent.py <<'PY'
+import os
+import sys
+import uuid
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+
+def main() -> int:
+    region = os.environ.get("AWS_REGION", "us-east-1")
+    agent_id = os.environ.get("BEDROCK_AGENT_ID")
+    alias_id = os.environ.get("BEDROCK_AGENT_ALIAS_ID")
+
+    if not agent_id or not alias_id:
+        print("ERROR: Agent ID or Alias ID is missing from .env")
+        return 1
+
+    client = boto3.client(
+        "bedrock-agent-runtime",
+        region_name=region,
+    )
+
+    question = (
+        "What should I check when a Kubernetes node becomes unavailable? "
+        "Give me easy numbered steps."
+    )
+
+    print("Calling OpsAI Assistant...")
+    print(f"Agent ID: {agent_id}")
+    print(f"Alias ID: {alias_id}")
+    print()
+
+    try:
+        response = client.invoke_agent(
+            agentId=agent_id,
+            agentAliasId=alias_id,
+            sessionId=str(uuid.uuid4()),
+            inputText=question,
+            enableTrace=False,
+        )
+
+        answer_parts = []
+
+        for event in response.get("completion", []):
+            chunk = event.get("chunk")
+
+            if chunk and "bytes" in chunk:
+                answer_parts.append(
+                    chunk["bytes"].decode("utf-8")
+                )
+
+        answer = "".join(answer_parts).strip()
+
+        if not answer:
+            print("No answer was received from the agent.")
+            return 1
+
+        print("OpsAI Assistant response:")
+        print("-" * 60)
+        print(answer)
+        print("-" * 60)
+
+        return 0
+
+    except ClientError as error:
+        print(f"AWS ERROR: {error}")
+        return 1
+    except BotoCoreError as error:
+        print(f"SDK ERROR: {error}")
+        return 1
+    except Exception as error:
+        print(f"UNEXPECTED ERROR: {error}")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+PY
+
+
+3. Run the test
+python3 app/test_agent.py
+Final result
+
+The Python application successfully invoked the deployed OpsAI Assistant agent.
+
+The response included:
+
+Kubernetes node-status checks
+kubectl describe node
+Pod checks for the affected node
+Common causes such as RKE2 service, CPU, memory, disk and network issues
+Recovery validation commands
+
+No AWS error was reported.
+
+Step 13B Status: Passed ✅
+
+Overall Step 13 Status
+Agent ID verification: Passed
+Alias verification: Passed
+Alias status: PREPARED
+Python invocation: Passed
+Knowledge Base response: Passed

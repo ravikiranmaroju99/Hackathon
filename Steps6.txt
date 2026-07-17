@@ -1,0 +1,129 @@
+Steps6
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 6 — Create the Bedrock Knowledge Base
+
+We will use S3 Vectors because it is managed by AWS and is suitable for a cost-effective MVP. Bedrock can automatically create the S3 vector bucket and vector index for us.
+
+6.1 Get the S3 path
+
+In CloudShell, run:
+
+cd ~/opsai-assistant-aws
+source .env
+
+echo "s3://$OPSAI_BUCKET/knowledge/"
+
+Copy the displayed S3 path.
+
+6.2 Open Knowledge Bases
+Open Amazon Bedrock.
+Confirm the Region is:
+US East (N. Virginia) — us-east-1
+On the left side, expand Build.
+Select Knowledge bases.
+Select Create.
+Choose:
+Knowledge Base with vector store
+6.3 Enter Knowledge Base Details
+
+Use these values:
+
+Knowledge base name
+opsai-assistant-kb
+Description
+Knowledge base containing approved Kubernetes, Jenkins, cloud and infrastructure operations runbooks for OpsAI Assistant.
+IAM permissions
+
+Select:
+
+Create and use a new service role
+
+Allow AWS to generate the role name.
+
+Do not select a custom IAM role for now.
+
+6.4 Configure the Data Source
+
+For Data source type, select:
+
+Amazon S3
+
+Use this data-source name:
+
+opsai-runbooks-s3
+
+For the S3 location, paste the path copied from CloudShell:
+
+s3://<your-bucket-name>/knowledge/
+
+Make sure /knowledge/ is included.
+
+For the remaining options, select:
+
+Parsing strategy: Default parser
+Chunking strategy: Default chunking
+
+Do not enable multimodal parsing because our current documents contain only text.
+
+Select Next.
+
+6.5 Select the Embedding Model
+
+For the embedding model, select:
+
+Titan Text Embeddings V2
+
+Confirm the model ID is:
+
+amazon.titan-embed-text-v2:0
+
+Keep the default settings:
+
+Embedding type: Float
+Vector dimensions: 1024
+
+S3 Vectors supports floating-point vectors for Bedrock Knowledge Bases.
+
+6.6 Configure the Vector Store
+
+Select:
+
+Quick create a new vector store
+
+For the vector-store type, select:
+
+Amazon S3 Vectors
+
+It may appear as:
+
+S3 vector bucket
+
+Keep the default encryption option. Bedrock will automatically create a separate S3 vector bucket and vector index.
+
+Select Next.
+
+6.7 Review and Create
+
+Confirm:
+
+Knowledge base: opsai-assistant-kb
+Data source: Amazon S3
+Embedding model: Titan Text Embeddings V2
+Vector store: Amazon S3 Vectors
+IAM role: New service role
+
+Select:
+
+Create knowledge base
+
+Wait until the knowledge-base status becomes:
+
+Ready
+
+or:
+
+Available
+
+Do not select Sync yet. We will perform the first synchronization and test the runbooks in Step 7. AWS requires the data source to be synchronized after the knowledge base is ready.
+
+Complete only Step 6

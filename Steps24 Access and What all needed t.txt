@@ -1,0 +1,121 @@
+Step24 Access and What all needed to deploy this APP
++++++
+
+Below details need to be asked for the team to work 
+
+You need permission to work with these AWS services:
+
+AWS CloudShell
+To run AWS CLI commands
+Recommended policy: AWSCloudShellFullAccess
+Amazon Bedrock
+View and test Nova Lite
+Use Titan Embeddings
+Create Knowledge Bases
+Create and prepare Bedrock Agents
+Create agent aliases
+Invoke the agent
+Recommended policy: AmazonBedrockFullAccess
+Amazon S3
+Create the knowledge bucket
+Upload and update runbooks
+Enable encryption, versioning and public-access blocking
+Recommended for the demo: AmazonS3FullAccess
+For production, limit access only to the OpsAI buckets.
+AWS Lambda
+Create and update the backend function
+Configure environment variables
+Invoke and test the function
+Add API Gateway invocation permission
+Recommended policy: AWSLambda_FullAccess
+Amazon API Gateway
+Create the HTTP API
+Create the Lambda integration
+Create the /chat route and deployment stage
+Configure CORS
+Recommended policy: AmazonAPIGatewayAdministrator
+AWS Amplify Hosting
+Create the Amplify application
+Create the main branch
+Upload and redeploy the web UI
+Ask for permissions to manage Amplify Hosting applications, branches, deployments and jobs. AWS provides Amplify managed policies, but some of them are very powerful, so a restricted custom policy is preferable.
+Amazon CloudWatch Logs
+View Lambda logs
+Create or update log groups
+Configure log-retention settings
+Recommended policy: CloudWatchLogsFullAccess
+IAM role management
+
+Create the Bedrock and Lambda service roles
+Attach managed policies
+Add inline policies
+Pass the roles to Bedrock and Lambda
+Required IAM permissions include:
+
+iam:CreateRole
+iam:GetRole
+iam:PassRole
+iam:AttachRolePolicy
+iam:PutRolePolicy
+iam:GetRolePolicy
+iam:ListAttachedRolePolicies
+iam:ListRolePolicies
+iam:PassRole is especially required when assigning an execution role to Lambda or Bedrock. It should be restricted only to the OpsAI roles, not every role in the AWS account.
+
+Basic account identity permission
+sts:GetCallerIdentity
+This is used to confirm the AWS account and identity currently being used.
+
+Simple permission request to send
+Subject: AWS permissions required for OpsAI Assistant MVP
+
+Hi Team,
+
+I need temporary AWS access to build and demonstrate the OpsAI Assistant MVP in the us-east-1 Region.
+
+Please provide an IAM user or IAM role with console and AWS CloudShell access. Root-account access is not required.
+
+The following AWS service permissions are required:
+
+AWS CloudShell
+Amazon Bedrock models, Knowledge Bases and Agents
+Amazon S3
+AWS Lambda
+Amazon API Gateway HTTP APIs
+AWS Amplify Hosting
+Amazon CloudWatch Logs
+AWS IAM role creation and iam:PassRole
+AWS STS GetCallerIdentity
+The access is required to:
+
+Create an S3 knowledge bucket
+Upload operational runbooks
+Create and sync a Bedrock Knowledge Base
+Create and deploy a Bedrock Agent
+Create a Lambda backend
+Create an API Gateway endpoint
+Deploy the chatbot UI using Amplify Hosting
+View application logs in CloudWatch
+Create and pass only the required OpsAI service roles
+Suggested AWS-managed policies for the MVP are:
+
+AWSCloudShellFullAccess
+AmazonBedrockFullAccess
+AmazonS3FullAccess
+AWSLambda_FullAccess
+AmazonAPIGatewayAdministrator
+CloudWatchLogsFullAccess
+Please also provide restricted Amplify Hosting permissions and IAM permissions to create and pass only these roles:
+
+OpsAILambdaExecutionRole
+AmazonBedrockExecutionRoleForKnowledgeBase_*
+AmazonBedrockExecutionRoleForAgents_*
+This access is required only for the hackathon MVP setup and testing. It can be reduced or removed after the activity is completed.
+
+Thanks,
+Ravi Kiran Maroju
+
+Easiest option for a short hackathon
+The easiest option is temporary AdministratorAccess on a separate IAM role or IAM user. However, it gives very broad access. It should be time-limited, monitored and removed immediately after the setup.
+
+The safer option is the service-specific permissions listed above, with IAM and S3 access restricted only to resources beginning with:

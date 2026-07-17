@@ -1,0 +1,339 @@
+Steps17
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 17 — Fix Chat Response Formatting
+
+This will display:
+
+**text** as bold
+Commands such as kubectl get nodes in code format
+Numbered and bullet lists properly
+Multiline code blocks clearly
+
+It will also safely escape HTML to protect the chatbot page.
+
+Step 17A — Update the JavaScript Formatter
+
+Run this in CloudShell:
+
+cd ~/opsai-assistant-aws
+
+python3 - <<'PY'
+from pathlib import Path
+
+app_file = Path("app/web/app.js")
+content = app_file.read_text(encoding="utf-8")
+
+marker = '''function createId(prefix = "id") {
+    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+'''
+
+formatter = r'''
+function escapeHtml(value) {
+    const element = document.createElement("div");
+    element.textContent = String(value ?? "");
+    return element.innerHTML;
+}
+
+function formatInlineMarkdown(value) {
+    let safeText = escapeHtml(value);
+
+    safeText = safeText.replace(
+        /`([^`\n]+)`/g,
+        "<code>$1</code>"
+    );
+
+    safeText = safeText.replace(
+        /\*\*([^*]+)\*\*/g,
+        "<strong>$1</strong>"
+    );
+
+    safeText = safeText.replace(
+        /\*([^*\n]+)\*/g,
+        "<em>$1</em>"
+    );
+
+    return safeText;
+}
+
+function renderMarkdown(markdown) {
+    const lines = String(markdown ?? "").replace(/\r/g, "").split("\n");
+    const output = [];
+
+    let listType = null;
+    let insideCodeBlock = false;
+    let codeLines = [];
+
+    function closeList() {
+        if (listType) {
+            output.push(`</${listType}>`);
+            listType = null;
+        }
+    }
+
+    function openList(type) {
+        if (listType === type) {
+            return;
+        }
+
+        closeList();
+        output.push(`<${type}>`);
+        listType = type;
+    }
+
+    for (const line of lines) {
+        if (line.trim().startsWith("```")) {
+            closeList();
+
+            if (insideCodeBlock) {
+                output.push(
+                    `<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`
+                );
+                codeLines = [];
+                insideCodeBlock = false;
+            } else {
+                insideCodeBlock = true;
+            }
+
+            continue;
+        }
+
+        if (insideCodeBlock) {
+            codeLines.push(line);
+            continue;
+        }
+
+        const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
+
+        if (headingMatch) {
+            closeList();
+
+            const level = headingMatch[1].length + 2;
+
+            output.push(
+                `<h${level}>${formatInlineMarkdown(headingMatch[2])}</h${level}>`
+            );
+
+            continue;
+        }
+
+        const orderedMatch = line.match(/^\s*\d+\.\s+(.+)$/);
+
+        if (orderedMatch) {
+            openList("ol");
+            output.push(
+                `<li>${formatInlineMarkdown(orderedMatch[1])}</li>`
+            );
+            continue;
+        }
+
+        const bulletMatch = line.match(/^\s*[-•]\s+(.+)$/);
+
+        if (bulletMatch) {
+            openList("ul");
+            output.push(
+                `<li>${formatInlineMarkdown(bulletMatch[1])}</li>`
+            );
+            continue;
+        }
+
+        if (!line.trim()) {
+            closeList();
+            continue;
+        }
+
+        closeList();
+        output.push(`<p>${formatInlineMarkdown(line)}</p>`);
+    }
+
+    closeList();
+
+    if (insideCodeBlock && codeLines.length) {
+        output.push(
+            `<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`
+        );
+    }
+
+    return output.join("");
+}
+'''
+
+if "function renderMarkdown(markdown)" not in content:
+    if marker not in content:
+        raise SystemExit("Could not find the JavaScript insertion point.")
+
+    content = content.replace(marker, marker + formatter)
+    print("Markdown formatter added.")
+else:
+    print("Markdown formatter already exists.")
+
+old_block = '''    const content = document.createElement("div");
+    content.textContent = message.content;
+    bubble.appendChild(content);
+'''
+
+new_block = '''    const content = document.createElement("div");
+
+    if (message.role === "assistant") {
+        content.className = "markdown-content";
+        content.innerHTML = renderMarkdown(message.content);
+    } else {
+        content.textContent = message.content;
+    }
+
+    bubble.appendChild(content);
+'''
+
+if new_block in content:
+    print("Assistant response rendering is already updated.")
+elif old_block in content:
+    content = content.replace(old_block, new_block)
+    print("Assistant response rendering updated.")
+else:
+    raise SystemExit("Could not find the message rendering section.")
+
+app_file.write_text(content, encoding="utf-8")
+PY
+
+grep -n "renderMarkdown" app/web/app.js
+Step 17B — Add Formatting Styles
+
+Run:
+
+cat >> ~/opsai-assistant-aws/app/web/styles.css <<'EOF'
+
+/* OpsAI response formatting */
+
+.markdown-content p {
+    margin: 0 0 11px;
+}
+
+.markdown-content p:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5 {
+    margin: 17px 0 8px;
+    color: #132a4f;
+    line-height: 1.35;
+}
+
+.markdown-content ol,
+.markdown-content ul {
+    margin: 8px 0 14px;
+    padding-left: 25px;
+}
+
+.markdown-content li {
+    margin: 6px 0;
+    padding-left: 3px;
+}
+
+.markdown-content strong {
+    color: #132a4f;
+    font-weight: 750;
+}
+
+.markdown-content code {
+    padding: 2px 6px;
+    border: 1px solid #dbeafe;
+    border-radius: 5px;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-family:
+        "Cascadia Code",
+        "Consolas",
+        monospace;
+    font-size: 0.92em;
+}
+
+.markdown-content pre {
+    margin: 12px 0;
+    padding: 14px;
+    overflow-x: auto;
+    border-radius: 10px;
+    background: #0f172a;
+}
+
+.markdown-content pre code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #e2e8f0;
+    white-space: pre;
+}
+EOF
+Step 17C — Redeploy the Updated UI
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+rm -f app/opsai-assistant-ui.zip
+
+cd app/web
+zip -qr ../opsai-assistant-ui.zip .
+cd ../..
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+while true
+do
+    STATUS=$(aws amplify get-job \
+      --app-id "$AMPLIFY_APP_ID" \
+      --branch-name "$AMPLIFY_BRANCH_NAME" \
+      --job-id "$JOB_ID" \
+      --region "$AWS_REGION" \
+      --query 'job.summary.status' \
+      --output text)
+
+    echo "Deployment status: $STATUS"
+
+    case "$STATUS" in
+        SUCCEED)
+            break
+            ;;
+        FAILED|CANCELLED)
+            echo "Deployment failed."
+            exit 1
+            ;;
+        *)
+            sleep 10
+            ;;
+    esac
+done
+
+echo "Updated chatbot URL: $AMPLIFY_URL"
+
+After it shows SUCCEED, press Ctrl + F5 in the browser and ask:
+
+What are the benefits of OpsAI? Give the answer with bold headings and numbered points.
+
+The ** symbols should disappear, and the headings should display in bold.

@@ -1,0 +1,112 @@
+Steps4
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Step 4 — Create the S3 Knowledge Bucket
+
+This bucket will store the SOPs, runbooks and incident documents used by the Bedrock Knowledge Base. Amazon Bedrock supports Amazon S3 as a knowledge-base data source.
+
+In the same CloudShell window, copy and run this complete block:
+
+
+cd ~/opsai-assistant-aws
+
+# Set the AWS Region
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
+
+# Get your AWS account ID
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query Account \
+  --output text)
+
+# Create a globally unique bucket name
+BUCKET_NAME="opsai-assistant-kb-${ACCOUNT_ID}-${AWS_REGION}"
+
+echo "Creating bucket: $BUCKET_NAME"
+
+# Create the S3 bucket
+aws s3api create-bucket \
+  --bucket "$BUCKET_NAME" \
+  --region "$AWS_REGION"
+
+# Block all public access
+aws s3api put-public-access-block \
+  --bucket "$BUCKET_NAME" \
+  --public-access-block-configuration \
+  BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+
+# Enable bucket versioning
+aws s3api put-bucket-versioning \
+  --bucket "$BUCKET_NAME" \
+  --versioning-configuration Status=Enabled
+
+# Enable server-side encryption
+aws s3api put-bucket-encryption \
+  --bucket "$BUCKET_NAME" \
+  --server-side-encryption-configuration \
+  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+
+# Create folders inside the bucket
+aws s3api put-object \
+  --bucket "$BUCKET_NAME" \
+  --key "knowledge/" >/dev/null
+
+aws s3api put-object \
+  --bucket "$BUCKET_NAME" \
+  --key "uploads/" >/dev/null
+
+aws s3api put-object \
+  --bucket "$BUCKET_NAME" \
+  --key "reports/" >/dev/null
+
+# Save the bucket information
+cat > ~/opsai-assistant-aws/.env <<EOF
+AWS_REGION=$AWS_REGION
+OPSAI_BUCKET=$BUCKET_NAME
+EOF
+
+chmod 600 ~/opsai-assistant-aws/.env
+
+
+New S3 buckets are private by default, but we are explicitly enabling all Block Public Access settings for additional protection. Versioning will also help recover earlier versions of documents.
+
+Validate Step 4
+
+Run:
+
+source ~/opsai-assistant-aws/.env
+
+echo "Region: $AWS_REGION"
+echo "Bucket: $OPSAI_BUCKET"
+
+aws s3 ls "s3://$OPSAI_BUCKET/"
+
+aws s3api get-bucket-versioning \
+  --bucket "$OPSAI_BUCKET"
+
+aws s3api get-public-access-block \
+  --bucket "$OPSAI_BUCKET"
+
+aws s3api get-bucket-encryption \
+  --bucket "$OPSAI_BUCKET"
+
+
+
+Expected result
+You should see:
+
+knowledge/
+uploads/
+reports/
+
+Versioning should show:
+
+{
+    "Status": "Enabled"
+}
+
+All four public-access settings should show:
+
+true
+
+Complete only Step 4

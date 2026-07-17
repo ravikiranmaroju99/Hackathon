@@ -1,0 +1,217 @@
+Steps15
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 15A — Create the API Gateway HTTP API
+
+API Gateway will provide a public HTTPS endpoint that the chatbot web page can call. HTTP APIs support Lambda proxy integration, CORS and automatic deployment.
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+API_NAME="opsai-assistant-http-api"
+
+cat > api-cors.json <<'EOF'
+{
+  "AllowOrigins": ["*"],
+  "AllowMethods": ["POST", "OPTIONS"],
+  "AllowHeaders": ["content-type"],
+  "MaxAge": 300
+}
+EOF
+
+# Check whether the API already exists
+API_ID=$(aws apigatewayv2 get-apis \
+  --region "$AWS_REGION" \
+  --query "Items[?Name=='$API_NAME'].ApiId | [0]" \
+  --output text)
+
+if [[ -z "$API_ID" || "$API_ID" == "None" ]]; then
+  echo "Creating HTTP API..."
+
+  API_ID=$(aws apigatewayv2 create-api \
+    --name "$API_NAME" \
+    --protocol-type HTTP \
+    --cors-configuration file://api-cors.json \
+    --region "$AWS_REGION" \
+    --query 'ApiId' \
+    --output text)
+else
+  echo "Using existing HTTP API: $API_ID"
+
+  aws apigatewayv2 update-api \
+    --api-id "$API_ID" \
+    --cors-configuration file://api-cors.json \
+    --region "$AWS_REGION" \
+    >/dev/null
+fi
+
+echo "API ID: $API_ID"
+
+CORS is needed because the chatbot UI and API will initially use different web addresses. API Gateway can automatically answer browser OPTIONS preflight requests after CORS is configured.
+
+Step 15B — Connect API Gateway to Lambda
+
+Run:
+
+# Find an existing integration
+INTEGRATION_ID=$(aws apigatewayv2 get-integrations \
+  --api-id "$API_ID" \
+  --region "$AWS_REGION" \
+  --query 'Items[0].IntegrationId' \
+  --output text)
+
+# Create the Lambda integration when it does not exist
+if [[ -z "$INTEGRATION_ID" || "$INTEGRATION_ID" == "None" ]]; then
+  echo "Creating Lambda integration..."
+
+  INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+    --api-id "$API_ID" \
+    --integration-type AWS_PROXY \
+    --integration-uri "$LAMBDA_FUNCTION_ARN" \
+    --payload-format-version 2.0 \
+    --timeout-in-millis 30000 \
+    --region "$AWS_REGION" \
+    --query 'IntegrationId' \
+    --output text)
+fi
+
+echo "Integration ID: $INTEGRATION_ID"
+
+# Check whether the POST /chat route exists
+ROUTE_ID=$(aws apigatewayv2 get-routes \
+  --api-id "$API_ID" \
+  --region "$AWS_REGION" \
+  --query "Items[?RouteKey=='POST /chat'].RouteId | [0]" \
+  --output text)
+
+if [[ -z "$ROUTE_ID" || "$ROUTE_ID" == "None" ]]; then
+  echo "Creating POST /chat route..."
+
+  ROUTE_ID=$(aws apigatewayv2 create-route \
+    --api-id "$API_ID" \
+    --route-key "POST /chat" \
+    --target "integrations/$INTEGRATION_ID" \
+    --region "$AWS_REGION" \
+    --query 'RouteId' \
+    --output text)
+fi
+
+echo "Route ID: $ROUTE_ID"
+
+# Create the default stage with automatic deployment
+STAGE_NAME=$(aws apigatewayv2 get-stages \
+  --api-id "$API_ID" \
+  --region "$AWS_REGION" \
+  --query "Items[?StageName=='\$default'].StageName | [0]" \
+  --output text)
+
+if [[ -z "$STAGE_NAME" || "$STAGE_NAME" == "None" ]]; then
+  aws apigatewayv2 create-stage \
+    --api-id "$API_ID" \
+    --stage-name '$default' \
+    --auto-deploy \
+    --region "$AWS_REGION" \
+    >/dev/null
+else
+  aws apigatewayv2 update-stage \
+    --api-id "$API_ID" \
+    --stage-name '$default' \
+    --auto-deploy \
+    --region "$AWS_REGION" \
+    >/dev/null
+fi
+
+The Lambda proxy integration forwards the browser request to Lambda and returns Lambda’s response to the browser. We explicitly selected payload version 2.0, which matches the request format supported by the Lambda code we created.
+
+Grant API Gateway permission
+
+API Gateway requires permission in the Lambda function’s resource policy before it can invoke the function.
+
+Run:
+
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query Account \
+  --output text)
+
+PERMISSION_ID="OpsAIApiGatewayInvoke"
+
+# Remove an old statement with the same name, if present
+aws lambda remove-permission \
+  --function-name "$LAMBDA_FUNCTION_NAME" \
+  --statement-id "$PERMISSION_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null 2>&1 || true
+
+# Add API Gateway permission
+aws lambda add-permission \
+  --function-name "$LAMBDA_FUNCTION_NAME" \
+  --statement-id "$PERMISSION_ID" \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn \
+  "arn:aws:execute-api:${AWS_REGION}:${ACCOUNT_ID}:${API_ID}/*/POST/chat" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+API_ENDPOINT="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com"
+CHAT_API_URL="${API_ENDPOINT}/chat"
+
+# Save API details
+if grep -q '^OPSAI_API_ID=' .env; then
+  sed -i "s/^OPSAI_API_ID=.*/OPSAI_API_ID=$API_ID/" .env
+else
+  echo "OPSAI_API_ID=$API_ID" >> .env
+fi
+
+if grep -q '^OPSAI_API_URL=' .env; then
+  sed -i "s|^OPSAI_API_URL=.*|OPSAI_API_URL=$CHAT_API_URL|" .env
+else
+  echo "OPSAI_API_URL=$CHAT_API_URL" >> .env
+fi
+
+echo
+echo "API ID: $API_ID"
+echo "Chat API URL: $CHAT_API_URL"
+Step 15C — Test the API Endpoint
+
+Run:
+
+set -a
+source .env
+set +a
+
+curl -sS \
+  -X POST "$OPSAI_API_URL" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What should I check when a Kubernetes node becomes unavailable? Give me easy numbered steps.",
+    "sessionId": "opsai-api-test-001"
+  }' \
+  | python3 -m json.tool
+Expected result
+{
+  "answer": "Here are the steps to check when a Kubernetes node becomes unavailable...",
+  "sessionId": "opsai-api-test-001"
+}
+Optional CORS validation
+
+Run:
+
+curl -i \
+  -X OPTIONS "$OPSAI_API_URL" \
+  -H "Origin: https://example.com" \
+  -H "Access-Control-Request-Method: POST" \
+  -H "Access-Control-Request-Headers: content-type"
+
+You should see headers similar to:
+
+access-control-allow-origin: *
+access-control-allow-methods: POST,OPTIONS
+access-control-allow-headers: content-type
+
+Complete Steps 15A, 15B and 15C,
+

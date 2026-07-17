@@ -1,0 +1,39 @@
+Steps3
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 3 — Create the OpsAI Project Folders
+
+Open AWS CloudShell and run:
+
+cd ~
+
+mkdir -p opsai-assistant-aws/{data,lambda,schemas,app,scripts,docs,reports}
+
+cd opsai-assistant-aws
+
+pwd
+
+find . -maxdepth 1 -type d | sort
+
+
+Expected output
+/home/cloudshell-user/opsai-assistant-aws
+.
+./app
+./data
+./docs
+./lambda
+./reports
+./schemas
+./scripts
+
+These folders will be used for:
+
+data — sample incidents, SOPs and knowledge documents
+lambda — AWS Lambda code
+schemas — Bedrock Agent action schemas
+app — chatbot application
+scripts — deployment scripts
+docs — project documentation
+reports — testing and MVP results
+
+Complete only Step 3

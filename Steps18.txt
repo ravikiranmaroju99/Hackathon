@@ -1,0 +1,500 @@
+Steps18
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 18A — Add OpsAI Overview and Benefits
+
+Run this in CloudShell:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+cat > data/opsai-assistant-overview.md <<'EOF'
+# OpsAI Assistant Overview
+
+## What is OpsAI Assistant?
+
+OpsAI Assistant is an enterprise IT operations support chatbot created to help cloud operations, Kubernetes, DevOps, SRE, infrastructure, service desk and application support teams.
+
+It uses approved operational documents and runbooks stored in an Amazon Bedrock Knowledge Base.
+
+## Current MVP Capabilities
+
+The current AWS MVP can:
+
+1. Answer questions using approved runbooks.
+2. Support Kubernetes, RKE2 and Jenkins troubleshooting.
+3. Provide easy numbered troubleshooting steps.
+4. provide useful validation commands.
+5. Maintain conversation context within the same chat session.
+6. Show previous conversations in browser chat history.
+7. Warn users that production changes require human approval.
+8. Be accessed through a browser-based chatbot interface.
+
+## Benefits of OpsAI Assistant
+
+### 1. Faster Troubleshooting
+
+OpsAI Assistant quickly searches approved operational runbooks and provides relevant troubleshooting steps. This can reduce the time spent manually searching documents.
+
+### 2. Consistent Support
+
+The assistant provides standardized guidance from approved sources. This helps different support engineers follow the same troubleshooting process.
+
+### 3. 24x7 Self-Service Access
+
+Users can access operational guidance at any time through the chatbot interface, subject to AWS service availability.
+
+### 4. Knowledge Sharing
+
+Important operational knowledge can be made available to support teams, new employees and project members through a common chatbot.
+
+### 5. Faster Employee Onboarding
+
+New team members can use OpsAI Assistant to understand approved procedures, troubleshooting commands and validation steps.
+
+### 6. Reduced Dependency on Individual Experts
+
+Operational knowledge is stored in an approved central Knowledge Base instead of depending only on the availability of specific engineers.
+
+### 7. Human Approval for Critical Changes
+
+OpsAI Assistant must request human approval before recommending or performing restarts, reboots, deletions, scaling, patching or production changes.
+
+### 8. Validation After Troubleshooting
+
+The assistant provides validation steps so that users can confirm whether the issue is resolved and services are operating correctly.
+
+### 9. Reusable Across Projects
+
+The solution can be reused for cloud operations, Kubernetes, DevOps, infrastructure and application-support requirements across different delivery teams and clients.
+
+### 10. Future Integration Possibilities
+
+Future versions can integrate with approved APIs for Jira, Jenkins, Kubernetes, monitoring tools, email and automation platforms.
+
+These integrations are not enabled for automatic production actions in the current MVP.
+
+## Security and Governance
+
+The current MVP:
+
+- Uses approved Knowledge Base documents.
+- Does not automatically execute production changes.
+- Requires human approval for critical actions.
+- Uses IAM permissions to control AWS access.
+- Stores application logs in Amazon CloudWatch.
+- Provides validation steps after troubleshooting.
+
+## Current MVP Architecture
+
+The request flow is:
+
+User browser interface  
+→ Amazon Amplify Hosting  
+→ Amazon API Gateway  
+→ AWS Lambda  
+→ Amazon Bedrock Agent  
+→ Amazon Bedrock Knowledge Base  
+→ Approved runbooks stored in Amazon S3
+
+## Creator and Contact
+
+OpsAI Assistant was created by Ravi Kiran Maroju.
+
+For suggestions or concerns, contact:
+
+ravi.maroju@cgi.com
+EOF
+
+aws s3 cp \
+  data/opsai-assistant-overview.md \
+  "s3://$OPSAI_BUCKET/knowledge/opsai-assistant-overview.md"
+
+echo
+echo "Uploaded documents:"
+aws s3 ls "s3://$OPSAI_BUCKET/knowledge/"
+
+You should see:
+
+opsai-assistant-overview.md
+Step 18B — Sync the Updated Knowledge Base
+
+Amazon Bedrock checks new, changed and deleted S3 documents when the data source is synchronized. The start-ingestion-job operation starts this sync and indexing process.
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+KB_ID=$(aws bedrock-agent list-knowledge-bases \
+  --region "$AWS_REGION" \
+  --query \
+  "knowledgeBaseSummaries[?name=='opsai-assistant-kb'].knowledgeBaseId | [0]" \
+  --output text)
+
+if [[ -z "$KB_ID" || "$KB_ID" == "None" ]]; then
+  echo "ERROR: Could not find opsai-assistant-kb."
+  exit 1
+fi
+
+DATA_SOURCE_ID=$(aws bedrock-agent list-data-sources \
+  --knowledge-base-id "$KB_ID" \
+  --region "$AWS_REGION" \
+  --query \
+  "dataSourceSummaries[?name=='opsai-runbooks-s3'].dataSourceId | [0]" \
+  --output text)
+
+if [[ -z "$DATA_SOURCE_ID" || "$DATA_SOURCE_ID" == "None" ]]; then
+  echo "ERROR: Could not find opsai-runbooks-s3."
+  exit 1
+fi
+
+echo "Knowledge Base ID: $KB_ID"
+echo "Data Source ID: $DATA_SOURCE_ID"
+
+INGESTION_JOB_ID=$(aws bedrock-agent start-ingestion-job \
+  --knowledge-base-id "$KB_ID" \
+  --data-source-id "$DATA_SOURCE_ID" \
+  --description "Add OpsAI overview and benefits document" \
+  --region "$AWS_REGION" \
+  --query 'ingestionJob.ingestionJobId' \
+  --output text)
+
+echo "Ingestion Job ID: $INGESTION_JOB_ID"
+echo "Waiting for Knowledge Base sync..."
+
+while true
+do
+  STATUS=$(aws bedrock-agent get-ingestion-job \
+    --knowledge-base-id "$KB_ID" \
+    --data-source-id "$DATA_SOURCE_ID" \
+    --ingestion-job-id "$INGESTION_JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'ingestionJob.status' \
+    --output text)
+
+  echo "Sync status: $STATUS"
+
+  case "$STATUS" in
+    COMPLETE)
+      break
+      ;;
+    FAILED|STOPPED)
+      echo "Knowledge Base sync was not successful."
+
+      aws bedrock-agent get-ingestion-job \
+        --knowledge-base-id "$KB_ID" \
+        --data-source-id "$DATA_SOURCE_ID" \
+        --ingestion-job-id "$INGESTION_JOB_ID" \
+        --region "$AWS_REGION" \
+        --query 'ingestionJob.failureReasons' \
+        --output json
+
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+aws bedrock-agent get-ingestion-job \
+  --knowledge-base-id "$KB_ID" \
+  --data-source-id "$DATA_SOURCE_ID" \
+  --ingestion-job-id "$INGESTION_JOB_ID" \
+  --region "$AWS_REGION" \
+  --query \
+  'ingestionJob.{Status:status,Statistics:statistics,FailureReasons:failureReasons}' \
+  --output json
+
+The expected final status is:
+
+COMPLETE
+
+AWS provides the Knowledge Base ID, data-source ID and ingestion-job ID to start and check an ingestion job.
+
+Step 18C — Test from the UI
+
+After the sync shows COMPLETE:
+
+Open the OpsAI chatbot.
+Press Ctrl + F5.
+Click New Chat.
+Ask:
+What are the benefits of OpsAI? Give the answer with bold headings and numbered points.
+
+Also test:
+
+Who created OpsAI Assistant and whom should I contact for suggestions?
+
+The assistant should now provide the benefits with properly formatted bold headings and identify Ravi Kiran Maroju with the contact address ravi.maroju@cgi.com.
+
+_____________________
+
+Step 18D — Fix HTML Tags in the UI
+
+Run this in CloudShell:
+
+cd ~/opsai-assistant-aws
+
+python3 - <<'PY'
+from pathlib import Path
+
+app_file = Path("app/web/app.js")
+content = app_file.read_text(encoding="utf-8")
+
+old_code = '''function renderMarkdown(markdown) {
+    const lines = String(markdown ?? "").replace(/\\r/g, "").split("\\n");
+'''
+
+new_code = r'''function normalizeModelOutput(value) {
+    let text = String(value ?? "");
+
+    // Convert HTML code blocks to Markdown code blocks.
+    text = text.replace(
+        /<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi,
+        (_, code) => `\`\`\`\n${code.trim()}\n\`\`\``
+    );
+
+    // Convert HTML headings to Markdown headings.
+    text = text.replace(
+        /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi,
+        (_, level, heading) =>
+            `${"#".repeat(Math.min(Number(level), 3))} ${heading.trim()}\n`
+    );
+
+    // Convert ordered HTML lists to numbered Markdown lists.
+    text = text.replace(
+        /<ol[^>]*>([\s\S]*?)<\/ol>/gi,
+        (_, body) => {
+            let number = 0;
+
+            return body.replace(
+                /<li[^>]*>([\s\S]*?)<\/li>/gi,
+                (_, item) => `${++number}. ${item.trim()}\n`
+            );
+        }
+    );
+
+    // Convert unordered HTML lists to Markdown bullet lists.
+    text = text.replace(
+        /<ul[^>]*>([\s\S]*?)<\/ul>/gi,
+        (_, body) =>
+            body.replace(
+                /<li[^>]*>([\s\S]*?)<\/li>/gi,
+                (_, item) => `- ${item.trim()}\n`
+            )
+    );
+
+    // Convert basic formatting tags.
+    text = text.replace(
+        /<strong[^>]*>([\s\S]*?)<\/strong>/gi,
+        "**$1**"
+    );
+
+    text = text.replace(
+        /<b[^>]*>([\s\S]*?)<\/b>/gi,
+        "**$1**"
+    );
+
+    text = text.replace(
+        /<em[^>]*>([\s\S]*?)<\/em>/gi,
+        "*$1*"
+    );
+
+    text = text.replace(
+        /<i[^>]*>([\s\S]*?)<\/i>/gi,
+        "*$1*"
+    );
+
+    text = text.replace(
+        /<code[^>]*>([\s\S]*?)<\/code>/gi,
+        "`$1`"
+    );
+
+    text = text.replace(/<br\s*\/?>/gi, "\n");
+
+    text = text.replace(
+        /<p[^>]*>([\s\S]*?)<\/p>/gi,
+        "$1\n"
+    );
+
+    // Remove remaining common layout tags.
+    text = text.replace(
+        /<\/?(?:div|span|section|article|header|footer|html|body)[^>]*>/gi,
+        ""
+    );
+
+    return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function renderMarkdown(markdown) {
+    const normalized = normalizeModelOutput(markdown);
+    const lines = normalized.replace(/\r/g, "").split("\n");
+'''
+
+if new_code in content:
+    print("HTML normalization is already configured.")
+elif old_code in content:
+    content = content.replace(old_code, new_code)
+    app_file.write_text(content, encoding="utf-8")
+    print("HTML normalization added successfully.")
+else:
+    raise SystemExit(
+        "Could not find renderMarkdown. Do not continue with deployment."
+    )
+PY
+
+grep -n "normalizeModelOutput" app/web/app.js
+Redeploy the UI
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+rm -f app/opsai-assistant-ui.zip
+
+cd app/web
+zip -qr ../opsai-assistant-ui.zip .
+cd ../..
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+while true
+do
+    STATUS=$(aws amplify get-job \
+      --app-id "$AMPLIFY_APP_ID" \
+      --branch-name "$AMPLIFY_BRANCH_NAME" \
+      --job-id "$JOB_ID" \
+      --region "$AWS_REGION" \
+      --query 'job.summary.status' \
+      --output text)
+
+    echo "Deployment status: $STATUS"
+
+    case "$STATUS" in
+        SUCCEED)
+            break
+            ;;
+        FAILED|CANCELLED)
+            echo "Deployment failed."
+            exit 1
+            ;;
+        *)
+            sleep 10
+            ;;
+    esac
+done
+
+echo "UI deployment completed: $AMPLIFY_URL"
+Step 18E — Strengthen the Agent Instructions
+
+The current alias uses a numbered agent version. Changes made in Agent Builder first apply to the working draft; after saving, the agent must be prepared and the deployed alias must be moved to a new version.
+
+Open:
+
+Amazon Bedrock
+→ Agents Classic
+→ opsai-assistant-agent
+→ Edit in Agent Builder
+
+Replace the complete Instructions for the Agent with:
+
+You are OpsAI Assistant, an enterprise IT operations support agent.
+
+GROUNDING RULES:
+
+1. Always search the connected Knowledge Base before answering questions about Kubernetes, RKE2, Jenkins, cloud, infrastructure, OpsAI Assistant, its benefits, creator or contact details.
+
+2. Use only information available in the approved Knowledge Base and runbooks.
+
+3. Do not invent names, email addresses, commands, procedures, capabilities or contact information.
+
+4. If the Knowledge Base does not contain the answer, clearly say that the information is not available in the approved Knowledge Base.
+
+OPSAI IDENTITY:
+
+OpsAI Assistant was created by Ravi Kiran Maroju.
+
+For suggestions or concerns, the approved contact address is ravi.maroju@cgi.com.
+
+Never provide a different creator name, generic support team or another email address.
+
+RESPONSE FORMAT:
+
+Use Markdown only.
+
+Never return HTML or XML tags such as h1, h2, strong, ol, ul, li, div or span.
+
+Give answers in easy English using clear headings, numbered steps and bullet points.
+
+Put commands inside Markdown backticks.
+
+SAFETY:
+
+For any restart, reboot, deletion, scaling, patching or production change, explain the possible impact and require human approval before the action is performed.
+
+Always provide validation steps after troubleshooting or recovery actions.
+
+Then:
+
+Click Save.
+Click Prepare.
+Wait for successfully prepared.
+Test in the Agent Builder:
+Who created OpsAI Assistant and whom should I contact for suggestions?
+
+The working-draft test should answer:
+
+OpsAI Assistant was created by Ravi Kiran Maroju.
+
+For suggestions or concerns, contact ravi.maroju@cgi.com.
+Step 18F — Update the Deployed Alias
+
+Preparing updates the working draft used for testing. Your application invokes the opsai-mvp alias, so that alias must be associated with the updated numbered version.
+
+After the Agent Builder test succeeds:
+
+Click Save and exit.
+Scroll to Aliases.
+Select opsai-mvp.
+Click Edit.
+Choose Create a new version and associate it with this alias.
+Keep On-demand.
+Click Save.
+Wait until the alias status becomes PREPARED.
+
+Finally, open the chatbot, press Ctrl + F5, click New Chat, and test:
+
+What are the benefits of OpsAI? Give the answer with bold headings and numbered points.
+Who created OpsAI Assistant and whom should I contact for suggestions?
+
+The HTML tags should disappear, and the creator/contact answer should be correct.
+

@@ -1,0 +1,34 @@
+Steps9
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 9A — Select the AI Model for Answer Generation
+
+Do only this part now:
+
+On the left, select:
+Standard retrieval with answer generation
+Click:
+Select model
+Choose:
+Provider: Amazon
+Model: Nova Lite
+If AWS asks for an inference option, choose:
+Inference profiles
+
+Then select the available US Nova Lite inference profile and click Apply. Amazon Bedrock Knowledge Bases can use a foundation model or inference profile to generate an answer from retrieved information.
+
+Do not run the question yet
+
+
+___________________
+
+Step 9B — Generate the AI Answer
+
+In the prompt box, enter:
+
+Using only the approved runbook, what should I check when a Kubernetes node becomes unavailable? Give the answer in easy English and numbered steps.
+
+Then click Run.
+
+You should receive a clear AI-generated answer based on the Kubernetes runbook, with source references.
+
+Run only this test

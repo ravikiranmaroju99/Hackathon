@@ -1,0 +1,28 @@
+Steps8
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 8 — Test Knowledge Retrieval
+Click Test at the top-right.
+In the test panel, turn off:
+Generate responses
+
+This tests whether Bedrock can retrieve information directly from your uploaded runbooks without using an AI model.
+
+Enter this question:
+What should I check when a Kubernetes node becomes unavailable?
+Click Run.
+Expected result
+
+You should see information such as:
+
+Run kubectl get nodes -o wide
+Describe the affected node
+Check pods running on the node
+Check CPU, memory and disk usage
+Check the RKE2 service
+Cordon and drain before approved maintenance
+
+The source should point to:
+
+kubernetes-node-unavailable.md
+
+Run only this test

@@ -1,0 +1,438 @@
+Steps14
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 14A — Create the Lambda Execution Role
+
+The Lambda function will receive questions from the web UI and invoke your deployed Bedrock agent. Every Lambda function needs an execution role, and the basic Lambda role permits writing logs to CloudWatch. We will separately grant only bedrock:InvokeAgent access to your deployed alias.
+
+Continue as opsai-admin in CloudShell and run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query Account \
+  --output text)
+
+ROLE_NAME="OpsAILambdaExecutionRole"
+
+cat > lambda-trust-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+
+# Create the role only if it does not already exist
+aws iam get-role \
+  --role-name "$ROLE_NAME" >/dev/null 2>&1 || \
+aws iam create-role \
+  --role-name "$ROLE_NAME" \
+  --assume-role-policy-document file://lambda-trust-policy.json
+
+# Allow Lambda to write logs to CloudWatch
+aws iam attach-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+# Allow Lambda to invoke only the deployed OpsAI agent alias
+cat > lambda-bedrock-policy.json <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeOpsAIAgent",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeAgent",
+      "Resource": "arn:aws:bedrock:${AWS_REGION}:${ACCOUNT_ID}:agent-alias/${BEDROCK_AGENT_ID}/${BEDROCK_AGENT_ALIAS_ID}"
+    }
+  ]
+}
+EOF
+
+aws iam put-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-name OpsAIInvokeBedrockAgent \
+  --policy-document file://lambda-bedrock-policy.json
+
+LAMBDA_ROLE_ARN=$(aws iam get-role \
+  --role-name "$ROLE_NAME" \
+  --query 'Role.Arn' \
+  --output text)
+
+if grep -q '^LAMBDA_ROLE_ARN=' .env; then
+  sed -i "s|^LAMBDA_ROLE_ARN=.*|LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN|" .env
+else
+  echo "LAMBDA_ROLE_ARN=$LAMBDA_ROLE_ARN" >> .env
+fi
+
+echo "Lambda role: $ROLE_NAME"
+echo "Role ARN: $LAMBDA_ROLE_ARN"
+
+aws iam list-attached-role-policies \
+  --role-name "$ROLE_NAME" \
+  --output table
+
+aws iam get-role-policy \
+  --role-name "$ROLE_NAME" \
+  --policy-name OpsAIInvokeBedrockAgent \
+  --query 'PolicyDocument.Statement[0].{Action:Action,Resource:Resource}' \
+  --output table
+Expected result
+
+You should see:
+
+Lambda role: OpsAILambdaExecutionRole
+
+The attached policy should show:
+
+AWSLambdaBasicExecutionRole
+
+The inline policy should show:
+
+Action: bedrock:InvokeAgent
+Resource: arn:aws:bedrock:us-east-1:...:agent-alias/FJ6R3CBW6H/LRVAF80EAC
+
+Complete only Step 14A
+
+_________________________________
+
+Step 14B — Create and Deploy the Lambda Backend
+
+The Lambda function will receive a question from the future chatbot UI, invoke the Bedrock Agent and return the answer. A Lambda ZIP deployment requires function code and an execution role.
+
+Run this complete block:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+FUNCTION_NAME="opsai-assistant-api"
+
+cat > lambda/lambda_function.py <<'PY'
+import base64
+import json
+import logging
+import os
+import uuid
+from typing import Any, Dict
+
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
+
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+
+AGENT_ID = os.environ["BEDROCK_AGENT_ID"]
+AGENT_ALIAS_ID = os.environ["BEDROCK_AGENT_ALIAS_ID"]
+ALLOWED_ORIGIN = os.environ.get("ALLOWED_ORIGIN", "*")
+
+bedrock_runtime = boto3.client("bedrock-agent-runtime")
+
+
+def build_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a response compatible with Lambda and API Gateway."""
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+            "Access-Control-Allow-Headers": "Content-Type",
+            "Access-Control-Allow-Methods": "OPTIONS,POST",
+        },
+        "body": json.dumps(payload),
+    }
+
+
+def read_payload(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Read either a direct Lambda event or an API Gateway request."""
+    body = event.get("body")
+
+    if body is None:
+        return event
+
+    if event.get("isBase64Encoded") and isinstance(body, str):
+        body = base64.b64decode(body).decode("utf-8")
+
+    if isinstance(body, str):
+        return json.loads(body)
+
+    if isinstance(body, dict):
+        return body
+
+    raise ValueError("Request body must contain valid JSON.")
+
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    method = (
+        event.get("requestContext", {})
+        .get("http", {})
+        .get("method")
+        or event.get("httpMethod")
+    )
+
+    if method == "OPTIONS":
+        return build_response(200, {"message": "CORS preflight successful"})
+
+    try:
+        payload = read_payload(event)
+
+        question = (
+            payload.get("question")
+            or payload.get("message")
+            or payload.get("inputText")
+        )
+
+        if not question or not str(question).strip():
+            return build_response(
+                400,
+                {"error": "Please provide a question."},
+            )
+
+        session_id = payload.get("sessionId") or str(uuid.uuid4())
+
+        logger.info(
+            "Invoking OpsAI agent. Request ID: %s",
+            getattr(context, "aws_request_id", "local-test"),
+        )
+
+        response = bedrock_runtime.invoke_agent(
+            agentId=AGENT_ID,
+            agentAliasId=AGENT_ALIAS_ID,
+            sessionId=session_id,
+            inputText=str(question).strip(),
+            enableTrace=False,
+        )
+
+        answer_parts = []
+
+        for event_item in response.get("completion", []):
+            chunk = event_item.get("chunk")
+
+            if chunk and "bytes" in chunk:
+                answer_parts.append(
+                    chunk["bytes"].decode("utf-8")
+                )
+
+        answer = "".join(answer_parts).strip()
+
+        if not answer:
+            return build_response(
+                502,
+                {"error": "The agent did not return an answer."},
+            )
+
+        return build_response(
+            200,
+            {
+                "answer": answer,
+                "sessionId": session_id,
+            },
+        )
+
+    except (json.JSONDecodeError, ValueError) as error:
+        return build_response(400, {"error": str(error)})
+
+    except ClientError as error:
+        error_code = error.response.get("Error", {}).get(
+            "Code",
+            "AWSClientError",
+        )
+        logger.exception("AWS client error: %s", error_code)
+
+        return build_response(
+            500,
+            {"error": f"AWS service error: {error_code}"},
+        )
+
+    except BotoCoreError:
+        logger.exception("AWS SDK error")
+
+        return build_response(
+            500,
+            {"error": "AWS SDK communication error."},
+        )
+
+    except Exception:
+        logger.exception("Unexpected Lambda error")
+
+        return build_response(
+            500,
+            {"error": "Unexpected backend error."},
+        )
+PY
+
+# Create the ZIP deployment package
+rm -f lambda-package.zip
+
+cd lambda
+zip -q ../lambda-package.zip lambda_function.py
+cd ..
+
+echo "Lambda package created:"
+ls -lh lambda-package.zip
+
+# Give IAM a few seconds to finish role propagation
+sleep 15
+
+# Create the Lambda function, or update it if it already exists
+if aws lambda get-function \
+  --function-name "$FUNCTION_NAME" \
+  --region "$AWS_REGION" >/dev/null 2>&1
+then
+    echo "Updating existing Lambda function..."
+
+    aws lambda update-function-code \
+      --function-name "$FUNCTION_NAME" \
+      --region "$AWS_REGION" \
+      --zip-file fileb://lambda-package.zip >/dev/null
+
+    aws lambda wait function-updated \
+      --function-name "$FUNCTION_NAME" \
+      --region "$AWS_REGION"
+
+    aws lambda update-function-configuration \
+      --function-name "$FUNCTION_NAME" \
+      --region "$AWS_REGION" \
+      --role "$LAMBDA_ROLE_ARN" \
+      --runtime python3.12 \
+      --handler lambda_function.lambda_handler \
+      --timeout 60 \
+      --memory-size 256 \
+      --environment \
+      "Variables={BEDROCK_AGENT_ID=$BEDROCK_AGENT_ID,BEDROCK_AGENT_ALIAS_ID=$BEDROCK_AGENT_ALIAS_ID,ALLOWED_ORIGIN=*}" \
+      >/dev/null
+else
+    echo "Creating new Lambda function..."
+
+    aws lambda create-function \
+      --function-name "$FUNCTION_NAME" \
+      --region "$AWS_REGION" \
+      --runtime python3.12 \
+      --role "$LAMBDA_ROLE_ARN" \
+      --handler lambda_function.lambda_handler \
+      --zip-file fileb://lambda-package.zip \
+      --timeout 60 \
+      --memory-size 256 \
+      --environment \
+      "Variables={BEDROCK_AGENT_ID=$BEDROCK_AGENT_ID,BEDROCK_AGENT_ALIAS_ID=$BEDROCK_AGENT_ALIAS_ID,ALLOWED_ORIGIN=*}" \
+      >/dev/null
+fi
+
+aws lambda wait function-active-v2 \
+  --function-name "$FUNCTION_NAME" \
+  --region "$AWS_REGION"
+
+LAMBDA_FUNCTION_ARN=$(aws lambda get-function-configuration \
+  --function-name "$FUNCTION_NAME" \
+  --region "$AWS_REGION" \
+  --query 'FunctionArn' \
+  --output text)
+
+if grep -q '^LAMBDA_FUNCTION_NAME=' .env; then
+  sed -i \
+    "s/^LAMBDA_FUNCTION_NAME=.*/LAMBDA_FUNCTION_NAME=$FUNCTION_NAME/" \
+    .env
+else
+  echo "LAMBDA_FUNCTION_NAME=$FUNCTION_NAME" >> .env
+fi
+
+if grep -q '^LAMBDA_FUNCTION_ARN=' .env; then
+  sed -i \
+    "s|^LAMBDA_FUNCTION_ARN=.*|LAMBDA_FUNCTION_ARN=$LAMBDA_FUNCTION_ARN|" \
+    .env
+else
+  echo "LAMBDA_FUNCTION_ARN=$LAMBDA_FUNCTION_ARN" >> .env
+fi
+
+echo
+echo "Lambda function: $FUNCTION_NAME"
+echo "Lambda ARN: $LAMBDA_FUNCTION_ARN"
+
+aws lambda get-function-configuration \
+  --function-name "$FUNCTION_NAME" \
+  --region "$AWS_REGION" \
+  --query '{
+    FunctionName:FunctionName,
+    Runtime:Runtime,
+    Handler:Handler,
+    State:State,
+    Timeout:Timeout,
+    Memory:MemorySize
+  }' \
+  --output table
+
+Expected status:
+
+State: Active
+Runtime: python3.12
+Handler: lambda_function.lambda_handler
+Timeout: 60
+Memory: 256
+Step 14C — Test the Lambda Backend
+
+The Lambda function uses the Bedrock Agent Runtime. The answer is returned in the bytes field of the agent response chunk. Reusing the same sessionId later allows the UI to continue the same conversation.
+
+Run:
+
+cd ~/opsai-assistant-aws
+
+set -a
+source .env
+set +a
+
+cat > lambda-test-event.json <<'EOF'
+{
+  "question": "What should I check when a Kubernetes node becomes unavailable? Give me easy numbered steps.",
+  "sessionId": "opsai-lambda-test-001"
+}
+EOF
+
+aws lambda invoke \
+  --function-name "$LAMBDA_FUNCTION_NAME" \
+  --region "$AWS_REGION" \
+  --cli-binary-format raw-in-base64-out \
+  --payload file://lambda-test-event.json \
+  lambda-response.json
+
+AWS CLI version 2 requires raw-in-base64-out when literal JSON is supplied as the invocation payload.
+
+Now display the answer clearly:
+
+python3 - <<'PY'
+import json
+
+with open("lambda-response.json", encoding="utf-8") as file:
+    response = json.load(file)
+
+print("Lambda status code:", response.get("statusCode"))
+
+body = response.get("body", "")
+
+try:
+    parsed_body = json.loads(body)
+    print(json.dumps(parsed_body, indent=2))
+except (json.JSONDecodeError, TypeError):
+    print(body)
+PY
+Expected result
+Lambda status code: 200
+{
+  "answer": "Here are the steps...",
+  "sessionId": "opsai-lambda-test-001"
+}
+
+Complete Step 14B and Step 14C

@@ -1,0 +1,45 @@
+Steps11
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Step 11A — Exit the Agent Builder
+
+Click:
+
+Save and exit
+
+You will return to the Agent Details page. We will create an agent alias there so the OpsAI application can invoke this agent. AWS requires an alias to deploy and call the agent from an application; creating the alias also creates an agent version automatically.
+
+Do only this step
+
+___________________________
+
+Step 11B — Open Alias Creation
+
+Click Create Alias at the top-right.
+
+An alias is required before an application can invoke the agent. AWS will create a numbered agent version when the alias is created.
+
+Do not enter anything yet.
+
+___________________________
+
+Step 11C — Create the Agent Alias
+
+Enter these values:
+
+Alias name
+
+opsai-mvp
+
+Description
+
+MVP alias for invoking the OpsAI Assistant agent.
+
+Keep these selected:
+
+Create a new version and associate it with this alias
+On-demand (ODT)
+
+Do not select Provisioned Throughput.
+
+Then click Create alias and wait until its status becomes Prepared or Ready.

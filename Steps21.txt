@@ -1,0 +1,2425 @@
+Steps21
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Step 20 — Add Infrastructure Assets and Redeploy the UI
+
+Run the complete block in AWS CloudShell:
+
+cd ~/opsai-assistant-aws
+
+set -e
+export AWS_PAGER=""
+
+# Load the AWS and Amplify variables.
+set -a
+source .env
+set +a
+
+# Confirm the required files exist.
+if [[ ! -f app/web/demo-ops.js ]]; then
+    echo "ERROR: app/web/demo-ops.js was not found."
+    exit 1
+fi
+
+if [[ ! -f app/web/demo-ops.css ]]; then
+    echo "ERROR: app/web/demo-ops.css was not found."
+    exit 1
+fi
+
+# Create backups before changing the UI.
+BACKUP_TIME=$(date +%Y%m%d-%H%M%S)
+
+cp app/web/demo-ops.js \
+   "app/web/demo-ops.js.backup-$BACKUP_TIME"
+
+cp app/web/demo-ops.css \
+   "app/web/demo-ops.css.backup-$BACKUP_TIME"
+
+echo "Backup completed: $BACKUP_TIME"
+
+# ------------------------------------------------------------
+# Update the Infrastructure Assets JavaScript
+# ------------------------------------------------------------
+
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+file_path = Path("app/web/demo-ops.js")
+content = file_path.read_text(encoding="utf-8")
+
+new_nodes = r"""  const nodes = [
+    {
+      name: 'lin-advqa-rke2-node1.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'QA',
+      status: 'Compliant',
+      condition: 'Healthy',
+      workloads: '18 pods',
+      severity: 'None',
+      issue: 'No active issue',
+      action: 'No action required',
+      impact: 'None'
+    },
+    {
+      name: 'lin-advqa-rke2-node2.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'QA',
+      status: 'NotReady',
+      condition: 'RKE2 agent unavailable',
+      workloads: '7 pods',
+      severity: 'High',
+      issue: 'The RKE2 agent is not responding and application pods may be affected.',
+      action: 'Cordon, drain and restart the RKE2 agent',
+      impact: 'Pods may move to other workers. Application impact is possible if sufficient capacity is not available.'
+    },
+    {
+      name: 'lin-advqa-rke2-node3.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'QA',
+      status: 'Vulnerable',
+      condition: 'DiskPressure=True',
+      workloads: '14 pods',
+      severity: 'High',
+      issue: 'Root filesystem usage is 92% and security updates are pending.',
+      action: 'Clean approved old logs, apply security updates and validate DiskPressure',
+      impact: 'Application pods may be affected if the filesystem becomes full.'
+    },
+    {
+      name: 'lin-advdev-rke2-node6.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'Development',
+      status: 'PatchRequired',
+      condition: 'Kernel security updates pending',
+      workloads: '12 pods',
+      severity: 'Critical',
+      issue: 'Critical operating-system and kernel security updates are pending.',
+      action: 'Cordon, drain, apply approved patches and reboot during the maintenance window',
+      impact: 'Workloads will move to other available workers during maintenance.'
+    },
+    {
+      name: 'lin-advdev-rke2-node7.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'Development',
+      status: 'RebootRequired',
+      condition: 'Kernel updated',
+      workloads: '9 pods',
+      severity: 'High',
+      issue: 'Security patches are installed, but the updated kernel is not active.',
+      action: 'Cordon, drain and reboot the node after downtime approval',
+      impact: 'The node will be temporarily unavailable while it reboots.'
+    },
+    {
+      name: 'lin-advdev-rke2-node17.ams.com',
+      assetType: 'RKE2 Worker',
+      environment: 'Development',
+      status: 'Vulnerable',
+      condition: 'OpenSSL updates pending',
+      workloads: '11 pods',
+      severity: 'High',
+      issue: 'Security updates for OpenSSL and operating-system libraries are pending.',
+      action: 'Apply approved security updates and restart affected services',
+      impact: 'A brief service interruption may occur when affected services restart.'
+    },
+    {
+      name: 'lin-adv-ran-1rke2.ams.com',
+      assetType: 'RKE2 Control Plane',
+      environment: 'Management',
+      status: 'PatchRequired',
+      condition: 'Security remediation required',
+      workloads: 'Control plane',
+      severity: 'Critical',
+      issue: 'Remotely exploitable vulnerabilities with exposure paths require remediation.',
+      action: 'Apply approved security patches and reboot one control-plane node at a time',
+      impact: 'The cluster should remain available when quorum is maintained and nodes are patched sequentially.'
+    },
+    {
+      name: 'lin-adv-ran-2rke2.ams.com',
+      assetType: 'RKE2 Control Plane',
+      environment: 'Management',
+      status: 'Compliant',
+      condition: 'Healthy',
+      workloads: 'Control plane',
+      severity: 'None',
+      issue: 'Required security patches are applied and validation has passed.',
+      action: 'No action required',
+      impact: 'None'
+    },
+    {
+      name: 'lin-adv-ran-3rke2.ams.com',
+      assetType: 'RKE2 Control Plane',
+      environment: 'Management',
+      status: 'RebootRequired',
+      condition: 'Patching completed',
+      workloads: 'Control plane',
+      severity: 'High',
+      issue: 'Security patches are installed and a reboot is required to activate the updated kernel.',
+      action: 'Reboot after confirming cluster quorum and maintenance approval',
+      impact: 'Temporary control-plane capacity reduction during the reboot.'
+    },
+    {
+      name: 'lin-advqa-nfs.ams.com',
+      assetType: 'Linux NFS Server',
+      environment: 'QA',
+      status: 'PatchRequired',
+      condition: 'NFS and kernel updates pending',
+      workloads: 'NFS storage',
+      severity: 'Critical',
+      issue: 'Operating-system, kernel and NFS security updates are pending.',
+      action: 'Confirm application downtime, apply patches and reboot the server',
+      impact: 'Applications using this NFS server may be unavailable during the reboot.'
+    },
+    {
+      name: 'lin-rundeck-new.ams.com',
+      assetType: 'Automation Server',
+      environment: 'Shared Services',
+      status: 'Vulnerable',
+      condition: 'OpenSSH and Python updates pending',
+      workloads: 'Ansible and Rundeck',
+      severity: 'High',
+      issue: 'Security updates are required for OpenSSH, Python and operating-system packages.',
+      action: 'Apply approved updates and validate Rundeck and Ansible jobs',
+      impact: 'Automation jobs may be unavailable while services are restarted.'
+    },
+    {
+      name: 'w10jenkinstest1.ams.com',
+      assetType: 'Windows Jenkins Server',
+      environment: 'Testing',
+      status: 'PatchRequired',
+      condition: 'Windows cumulative update pending',
+      workloads: 'Jenkins',
+      severity: 'Critical',
+      issue: 'Critical Windows security and cumulative updates are pending.',
+      action: 'Apply Windows updates and schedule a controlled reboot',
+      impact: 'Jenkins jobs will be unavailable during the reboot.'
+    },
+    {
+      name: 'w10jenkinstest.ams.com',
+      assetType: 'Windows Application Server',
+      environment: 'Testing',
+      status: 'RebootRequired',
+      condition: 'Windows patches installed',
+      workloads: 'Application services',
+      severity: 'High',
+      issue: 'Windows security patches are installed, but a reboot is pending.',
+      action: 'Confirm application downtime and reboot the server',
+      impact: 'Application services will be temporarily unavailable.'
+    },
+    {
+      name: 'lin-advperf-ub-master1.ams.com',
+      assetType: 'Ubuntu RKE2 Server',
+      environment: 'Performance',
+      status: 'Vulnerable',
+      condition: 'Ubuntu security updates pending',
+      workloads: 'RKE2 control plane',
+      severity: 'High',
+      issue: 'Ubuntu operating-system and container-runtime updates are pending.',
+      action: 'Apply approved updates and validate RKE2 services',
+      impact: 'Control-plane capacity may be temporarily reduced during maintenance.'
+    },
+    {
+      name: 'lin-advtech-rke2ub-local1.ams.com',
+      assetType: 'Ubuntu RKE2 Server',
+      environment: 'Technology',
+      status: 'Compliant',
+      condition: 'Healthy',
+      workloads: 'RKE2 control plane and worker',
+      severity: 'None',
+      issue: 'Security patches are current and system validation has passed.',
+      action: 'No action required',
+      impact: 'None'
+    }
+  ];"""
+
+# Replace the existing worker-node or infrastructure-asset list.
+content, count = re.subn(
+    r"  const nodes = \[[\s\S]*?\n  \];",
+    new_nodes,
+    content,
+    count=1
+)
+
+if count != 1:
+    raise SystemExit(
+        "ERROR: Unable to locate and replace the existing nodes list."
+    )
+
+# Update the visible navigation and page wording.
+replacements = {
+    "▦ Worker Nodes":
+        "▦ Infrastructure Assets",
+
+    "'Worker Node Health'":
+        "'Infrastructure Health'",
+
+    "'Worker node health and operational status'":
+        "'Patch, vulnerability and worker-node status'",
+
+    "'Dummy cluster health for the demo'":
+        "'Patch, vulnerability and worker-node status'",
+
+    "<h2>Worker Nodes</h2>":
+        "<h2>Infrastructure Assets</h2>",
+
+    "<span>Total workers</span>":
+        "<span>Total assets</span>",
+
+    "Reset Demo":
+        "Reset View",
+
+    "Simulate Approved Action":
+        "Run Approved Action",
+
+    "OpsAI Demo User":
+        "OpsAI User",
+
+    "Demo Project Approver":
+        "Project Approver",
+
+    "Demo validation":
+        "Validation results",
+
+    "Dummy human-in-the-loop workflow.":
+        "Human approval workflow for operational changes.",
+
+    "Open Worker Nodes and request approval for a dummy issue.":
+        "Open Infrastructure Assets and request approval for a remediation item.",
+
+    "Open Worker Nodes and request approval for an item.":
+        "Open Infrastructure Assets and request approval for a remediation item.",
+
+    "No real action was executed":
+        "Remediation workflow completed"
+}
+
+for old, new in replacements.items():
+    content = content.replace(old, new)
+
+# Update the asset-card heading.
+old_header = """<div><h3>${esc(node.name)}</h3><p>Worker</p></div>"""
+
+new_header = """<div>
+            <h3>${esc(node.name)}</h3>
+            <p>${esc(node.assetType)}</p>
+          </div>"""
+
+if old_header in content:
+    content = content.replace(old_header, new_header)
+
+# Update the card metrics.
+old_metrics = """<div class="demo-node-metrics">
+          <div><span>Condition</span><strong>${esc(node.condition)}</strong></div>
+          <div><span>Pods</span><strong>${node.pods}</strong></div>
+        </div>"""
+
+new_metrics = """<div class="demo-node-metrics">
+          <div>
+            <span>Condition</span>
+            <strong>${esc(node.condition)}</strong>
+          </div>
+          <div>
+            <span>Environment</span>
+            <strong>${esc(node.environment)}</strong>
+          </div>
+          <div>
+            <span>Workloads</span>
+            <strong>${esc(node.workloads)}</strong>
+          </div>
+          <div>
+            <span>Severity</span>
+            <strong>${esc(node.severity)}</strong>
+          </div>
+        </div>"""
+
+if old_metrics in content:
+    content = content.replace(old_metrics, new_metrics)
+elif "node.workloads" not in content:
+    raise SystemExit(
+        "ERROR: Unable to locate the card metrics section."
+    )
+
+# Update the recovered asset status.
+content = re.sub(
+    r"""function currentNode\(node\) \{[\s\S]*?\n  \}""",
+    """function currentNode(node) {
+    return recovered.includes(node.name)
+      ? {
+          ...node,
+          status: 'Compliant',
+          condition: 'Healthy',
+          severity: 'None',
+          issue: 'Remediation completed and validated',
+          action: 'No action required'
+        }
+      : node;
+  }""",
+    content,
+    count=1
+)
+
+# Update the completion validation result.
+content, validation_count = re.subn(
+    r"""    item\.validation = \[[\s\S]*?\n    \];""",
+    """    item.validation = [
+      'Asset status: Compliant',
+      'Required security patches: Applied',
+      'Critical vulnerabilities: Resolved',
+      'Service validation: Passed',
+      'Remediation workflow: Completed'
+    ];""",
+    content,
+    count=1
+)
+
+if validation_count != 1:
+    raise SystemExit(
+        "ERROR: Unable to update the approval validation results."
+    )
+
+# Remove subtitles under the Infrastructure Assets heading.
+content = re.sub(
+    r"""<div>
+        <h2>(?:Infrastructure Assets|Worker Nodes)</h2>
+        <p>[^<]*</p>
+        </div>""",
+    r"<div><h2>Infrastructure Assets</h2></div>",
+    content,
+    flags=re.VERBOSE
+)
+
+content = re.sub(
+    r"""<div><h2>(?:Infrastructure Assets|Worker Nodes)</h2>
+        <p>[^<]*</p></div>""",
+    "<div><h2>Infrastructure Assets</h2></div>",
+    content,
+    flags=re.VERBOSE
+)
+
+# Remove warning or information boxes from both infrastructure
+# and approval pages.
+content = re.sub(
+    r'<div class="demo-warning">[\s\S]*?</div>',
+    "",
+    content
+)
+
+file_path.write_text(content, encoding="utf-8")
+
+print("Infrastructure Assets UI updated successfully.")
+print("Total infrastructure assets configured: 15")
+PY
+
+# ------------------------------------------------------------
+# Add the infrastructure status colours
+# ------------------------------------------------------------
+
+if ! grep -q "Infrastructure patch and vulnerability statuses" \
+     app/web/demo-ops.css
+then
+cat >> app/web/demo-ops.css <<'EOF'
+
+/* Infrastructure patch and vulnerability statuses */
+
+.demo-status.compliant {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.demo-status.patchrequired {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.demo-status.rebootrequired {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.demo-status.vulnerable {
+    background: #ffedd5;
+    color: #9a3412;
+}
+
+.demo-status.notready {
+    background: #fee2e2;
+    color: #991b1b;
+}
+EOF
+fi
+
+# ------------------------------------------------------------
+# Validate the updated files
+# ------------------------------------------------------------
+
+node --check app/web/demo-ops.js
+
+echo
+echo "Checking configured infrastructure assets..."
+
+ASSET_COUNT=$(grep -c "assetType:" app/web/demo-ops.js)
+
+echo "Infrastructure asset count: $ASSET_COUNT"
+
+if [[ "$ASSET_COUNT" -ne 15 ]]; then
+    echo "ERROR: Expected 15 infrastructure assets."
+    exit 1
+fi
+
+echo
+echo "Checking that the unwanted wording is removed..."
+
+if grep -nE \
+   "Sample operational data|PROTOTYPE|DEMO ONLY|Dummy data|No live cluster" \
+   app/web/demo-ops.js
+then
+    echo "ERROR: Unwanted wording is still present."
+    exit 1
+else
+    echo "Confirmed: unwanted wording is removed."
+fi
+
+echo
+echo "Configured statuses:"
+
+grep -oE \
+"status: '(Compliant|PatchRequired|RebootRequired|Vulnerable|NotReady)'" \
+app/web/demo-ops.js |
+sort |
+uniq -c
+
+# ------------------------------------------------------------
+# Package the updated UI
+# ------------------------------------------------------------
+
+rm -f app/opsai-assistant-ui.zip
+
+(
+    cd app/web
+    zip -qr ../opsai-assistant-ui.zip .
+)
+
+echo
+echo "UI package created:"
+ls -lh app/opsai-assistant-ui.zip
+
+# ------------------------------------------------------------
+# Create and start the Amplify deployment
+# ------------------------------------------------------------
+
+DEPLOYMENT_OUTPUT=$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)
+
+JOB_ID=$(echo "$DEPLOYMENT_OUTPUT" |
+  python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')
+
+UPLOAD_URL=$(echo "$DEPLOYMENT_OUTPUT" |
+  python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+
+echo "Amplify Job ID: $JOB_ID"
+
+curl -sS \
+  --upload-file app/opsai-assistant-ui.zip \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+echo
+echo "Waiting for Amplify deployment..."
+
+while true
+do
+    STATUS=$(aws amplify get-job \
+      --app-id "$AMPLIFY_APP_ID" \
+      --branch-name "$AMPLIFY_BRANCH_NAME" \
+      --job-id "$JOB_ID" \
+      --region "$AWS_REGION" \
+      --query 'job.summary.status' \
+      --output text)
+
+    echo "Deployment status: $STATUS"
+
+    case "$STATUS" in
+        SUCCEED)
+            break
+            ;;
+        FAILED|CANCELLED)
+            echo "ERROR: Amplify deployment failed."
+            exit 1
+            ;;
+        *)
+            sleep 10
+            ;;
+    esac
+done
+
+echo
+echo "=================================================="
+echo "Infrastructure Assets UI deployed successfully."
+echo "=================================================="
+echo
+echo "OpsAI URL:"
+echo "$AMPLIFY_URL"
+echo
+echo "Open the URL and press Ctrl + F5."
+
+
+Steps
+Option for HR Portal
+
+Upload One File
+
+In AWS CloudShell, click:
+
+Actions
+→ Upload file
+
+Upload:
+
+install_opsai_hr_portal_final.sh
+
+Confirm:
+
+cd ~
+
+ls -lh ~/install_opsai_hr_portal_final.sh
+Step 2 — Run the Final Installation
+chmod +x ~/install_opsai_hr_portal_final.sh
+
+bash ~/install_opsai_hr_portal_final.sh
+
+
+below is the script
+
+#!/usr/bin/env bash
+set -Eeuo pipefail
+export AWS_PAGER=""
+
+PROJECT_DIR="$HOME/opsai-assistant-aws"
+WEB_DIR="$PROJECT_DIR/app/web"
+ENV_FILE="$PROJECT_DIR/.env"
+
+cd "$PROJECT_DIR"
+
+if [[ ! -f "$ENV_FILE" ]]; then
+  echo "ERROR: $ENV_FILE was not found."
+  exit 1
+fi
+
+set -a
+source "$ENV_FILE"
+set +a
+
+AWS_REGION="${AWS_REGION:-us-east-1}"
+AMPLIFY_BRANCH_NAME="${AMPLIFY_BRANCH_NAME:-main}"
+
+if [[ ! -f "$WEB_DIR/index.html" ]]; then
+  echo "ERROR: $WEB_DIR/index.html was not found."
+  exit 1
+fi
+
+if [[ -z "${AMPLIFY_APP_ID:-}" ]]; then
+  AMPLIFY_APP_ID="$(aws amplify list-apps \
+    --region "$AWS_REGION" \
+    --query "apps[?name=='opsai-assistant-ui'].appId | [0]" \
+    --output text)"
+fi
+
+if [[ -z "$AMPLIFY_APP_ID" || "$AMPLIFY_APP_ID" == "None" ]]; then
+  echo "ERROR: Unable to find the Amplify app ID."
+  exit 1
+fi
+
+DEFAULT_DOMAIN="$(aws amplify get-app \
+  --app-id "$AMPLIFY_APP_ID" \
+  --region "$AWS_REGION" \
+  --query 'app.defaultDomain' \
+  --output text)"
+
+AMPLIFY_URL="${AMPLIFY_URL:-https://${AMPLIFY_BRANCH_NAME}.${DEFAULT_DOMAIN}}"
+
+BACKUP_TIME="$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="$PROJECT_DIR/backups/hr-portal-$BACKUP_TIME"
+mkdir -p "$BACKUP_DIR"
+
+cp "$WEB_DIR/index.html" "$BACKUP_DIR/index.html"
+
+if [[ -f "$WEB_DIR/hr-portal.js" ]]; then
+  cp "$WEB_DIR/hr-portal.js" "$BACKUP_DIR/hr-portal.js"
+fi
+
+if [[ -f "$WEB_DIR/hr-portal.css" ]]; then
+  cp "$WEB_DIR/hr-portal.css" "$BACKUP_DIR/hr-portal.css"
+fi
+
+echo "Existing HR Portal backup: $BACKUP_DIR"
+
+# -------------------------------------------------------------------
+# Remove the old HR Portal references and files.
+# -------------------------------------------------------------------
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+index_file = Path.home() / "opsai-assistant-aws" / "app" / "web" / "index.html"
+content = index_file.read_text(encoding="utf-8")
+
+content = re.sub(
+    r'\s*<link[^>]+href=["\'][^"\']*hr-portal\.css[^"\']*["\'][^>]*>\s*',
+    '\n',
+    content,
+    flags=re.IGNORECASE
+)
+
+content = re.sub(
+    r'\s*<script[^>]+src=["\'][^"\']*hr-portal\.js[^"\']*["\'][^>]*>\s*</script>\s*',
+    '\n',
+    content,
+    flags=re.IGNORECASE
+)
+
+index_file.write_text(content, encoding="utf-8")
+print("Old HR Portal references removed from index.html.")
+PY
+
+rm -f "$WEB_DIR/hr-portal.js" "$WEB_DIR/hr-portal.css"
+
+# -------------------------------------------------------------------
+# Create the final HR Portal stylesheet.
+# -------------------------------------------------------------------
+cat > "$WEB_DIR/hr-portal.css" <<'CSSEOF'
+/* OpsAI Internal HR Portal - Final */
+
+.hr-panel {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.hr-portal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.hr-portal-header h2,
+.hr-section-header h3,
+.hr-job-title,
+.hr-profile-card h4,
+.hr-manager-card h4 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.hr-portal-header p,
+.hr-section-header p,
+.hr-profile-card p,
+.hr-manager-card p {
+  color: #64748b;
+}
+
+.hr-portal-header p,
+.hr-section-header p {
+  margin: 5px 0 0;
+}
+
+.hr-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hr-role-switch {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.hr-role-button,
+.hr-reset-button {
+  border-radius: 8px;
+  padding: 9px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.hr-role-button {
+  border: 0;
+  background: transparent;
+  color: #475569;
+}
+
+.hr-role-button.active {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.hr-reset-button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.hr-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.hr-summary-card,
+.hr-profile-card,
+.hr-manager-card,
+.hr-job-card {
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.hr-summary-card {
+  padding: 14px;
+}
+
+.hr-summary-card span,
+.hr-job-meta span,
+.hr-manager-project span {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.hr-summary-card strong {
+  display: block;
+  margin-top: 7px;
+  color: #0f172a;
+  font-size: 25px;
+}
+
+.hr-section {
+  margin-top: 18px;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.hr-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e7edf5;
+}
+
+.hr-search-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e7edf5;
+  background: #f8fafc;
+}
+
+.hr-field label {
+  display: block;
+  margin-bottom: 5px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hr-field input,
+.hr-field select,
+.hr-stage-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  padding: 10px 11px;
+  background: #ffffff;
+  color: #0f172a;
+  outline: none;
+}
+
+.hr-field input:focus,
+.hr-field select:focus,
+.hr-stage-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.hr-job-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.hr-job-card {
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.hr-job-card:hover {
+  border-color: #93b4f5;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
+}
+
+.hr-job-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hr-job-id {
+  margin: 0 0 5px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.hr-job-title {
+  font-size: 16px;
+}
+
+.hr-job-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin: 14px 0;
+}
+
+.hr-job-meta div,
+.hr-manager-project {
+  border-radius: 9px;
+  padding: 9px;
+  background: #f8fafc;
+}
+
+.hr-job-meta strong,
+.hr-manager-project strong {
+  display: block;
+  margin-top: 3px;
+  color: #1e293b;
+  font-size: 13px;
+}
+
+.hr-job-description {
+  color: #475569;
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.hr-skill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+.hr-skill {
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hr-contact {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid #edf1f7;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.hr-card-actions,
+.hr-table-actions,
+.hr-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.hr-primary-button,
+.hr-secondary-button,
+.hr-success-button,
+.hr-danger-button,
+.hr-warning-button,
+.hr-neutral-button {
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.hr-primary-button {
+  flex: 1;
+  border: 0;
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.hr-primary-button:disabled {
+  background: #cbd5e1;
+  color: #64748b;
+  cursor: default;
+}
+
+.hr-secondary-button,
+.hr-neutral-button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+}
+
+.hr-success-button {
+  border: 0;
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.hr-danger-button {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+}
+
+.hr-warning-button {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.hr-profile-grid,
+.hr-manager-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.hr-profile-card,
+.hr-manager-card {
+  padding: 15px;
+}
+
+.hr-profile-card p,
+.hr-manager-card p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hr-table-wrap {
+  overflow-x: auto;
+  padding: 0 18px 18px;
+}
+
+.hr-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+}
+
+.hr-table th,
+.hr-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid #e7edf5;
+  text-align: left;
+  vertical-align: top;
+  font-size: 12px;
+}
+
+.hr-table th {
+  color: #475569;
+  background: #f8fafc;
+  font-weight: 800;
+}
+
+.hr-table td {
+  color: #1e293b;
+}
+
+.hr-empty {
+  padding: 40px 20px;
+  color: #64748b;
+  text-align: center;
+}
+
+.hr-placeholder-note {
+  margin: 0 18px 18px;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.hr-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hr-status.open,
+.hr-status.applied,
+.hr-status.shortlisted,
+.hr-status.selected,
+.hr-status.documentsverification {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.hr-status.urgent,
+.hr-status.rejected {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.hr-status.closingsoon,
+.hr-status.offerreview,
+.hr-status.offerreleasesoon {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.hr-status.hrscreening,
+.hr-status.hrinterviewscheduled,
+.hr-status.technicalround1,
+.hr-status.nexttechnicalround,
+.hr-status.technicalround2,
+.hr-status.managerround,
+.hr-status.clientround {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.hr-status.offerreleased,
+.hr-status.joined {
+  background: #ccfbf1;
+  color: #0f766e;
+}
+
+.hr-status.onhold {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.hr-candidate-table {
+  min-width: 1580px;
+}
+
+.hr-candidate-table .hr-action-column {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 330px;
+  background: #ffffff;
+  box-shadow: -5px 0 10px rgba(15, 23, 42, 0.07);
+}
+
+.hr-candidate-table thead .hr-action-column {
+  z-index: 4;
+  background: #f8fafc;
+}
+
+.hr-stage-control {
+  display: grid;
+  gap: 8px;
+  min-width: 305px;
+}
+
+.hr-stage-control label {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.hr-stage-select {
+  display: block;
+  margin-top: 5px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.hr-stage-update-button {
+  width: 100%;
+  padding: 8px 10px;
+}
+
+.hr-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 0;
+}
+
+.hr-quick-actions button {
+  padding: 7px 4px;
+  font-size: 9px;
+}
+
+.hr-no-action {
+  color: #64748b;
+  font-size: 12px;
+}
+
+@media (max-width: 950px) {
+  .hr-summary-grid,
+  .hr-profile-grid,
+  .hr-manager-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hr-search-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hr-job-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .hr-panel {
+    padding: 16px 12px;
+  }
+
+  .hr-portal-header,
+  .hr-header-actions {
+    flex-direction: column;
+  }
+
+  .hr-summary-grid,
+  .hr-profile-grid,
+  .hr-manager-grid,
+  .hr-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hr-role-switch {
+    width: 100%;
+  }
+
+  .hr-role-button {
+    flex: 1;
+  }
+}
+CSSEOF
+
+# -------------------------------------------------------------------
+# Create the final HR Portal JavaScript.
+# -------------------------------------------------------------------
+cat > "$WEB_DIR/hr-portal.js" <<'JSEOF'
+(() => {
+  const PROFILE_KEY = 'opsai-hr-final-profile-v1';
+  const APPLICATIONS_KEY = 'opsai-hr-final-applications-v1';
+
+  const stages = [
+    'APPLIED',
+    'HR SCREENING',
+    'HR INTERVIEW SCHEDULED',
+    'SHORTLISTED',
+    'TECHNICAL ROUND 1',
+    'NEXT TECHNICAL ROUND',
+    'TECHNICAL ROUND 2',
+    'MANAGER ROUND',
+    'CLIENT ROUND',
+    'SELECTED',
+    'DOCUMENTS VERIFICATION',
+    'OFFER REVIEW',
+    'OFFER RELEASE SOON',
+    'OFFER RELEASED',
+    'JOINED',
+    'ON HOLD',
+    'REJECTED'
+  ];
+
+  const managers = [
+    ['MGR-1001','Ananya Sharma','Hiring Manager - Cloud and Infrastructure','Hyderabad','Cloud Platform Modernization','ananya.sharma@cgi.example','+91 98480 01X01'],
+    ['MGR-1002','Vikram Rao','Program Manager - DevSecOps','Bangalore','DevSecOps Automation','vikram.rao@cgi.example','+91 98480 01X02'],
+    ['MGR-1003','Priya Menon','Delivery Manager - Quality Engineering','Hyderabad','Quality Engineering Transformation','priya.menon@cgi.example','+91 98480 01X03'],
+    ['MGR-1004','Arjun Nair','Engineering Manager - Application Development','Chennai','Digital Banking APIs','arjun.nair@cgi.example','+91 98480 01X04'],
+    ['MGR-1005','Meera Iyer','Data and AI Manager','Bangalore','AI Operations Assistant','meera.iyer@cgi.example','+91 98480 01X05'],
+    ['MGR-1006','Sandeep Varma','Infrastructure Operations Manager','Bangalore','Enterprise Infrastructure Operations','sandeep.varma@cgi.example','+91 98480 01X06'],
+    ['MGR-1007','Kavya Reddy','Delivery Manager - Cloud Security','Hyderabad','Cloud Security and Compliance','kavya.reddy@cgi.example','+91 98480 01X07'],
+    ['MGR-1008','Rahul Khanna','Program Manager - Data Platforms','Bangalore','Enterprise Data Platform','rahul.khanna@cgi.example','+91 98480 01X08'],
+    ['MGR-1009','Nisha Thomas','Delivery Manager - ERP and Business Apps','Chennai','Business Applications Modernization','nisha.thomas@cgi.example','+91 98480 01X09'],
+    ['MGR-1010','Rohit Kulkarni','Engineering Manager - Platform Reliability','Pune','SRE and Observability','rohit.kulkarni@cgi.example','+91 98480 01X10']
+  ].map(item => ({
+    id: item[0],
+    name: item[1],
+    role: item[2],
+    city: item[3],
+    project: item[4],
+    email: item[5],
+    phone: item[6]
+  }));
+
+  const jobs = [
+    ['J0526-1316','Senior Technical Architect / DevOps Engineer','Architecture','Bangalore','India','10-15 years',2,'Urgent','Cloud Platform Modernization','MGR-1001',['AWS','Kubernetes','Terraform','DevOps','Linux','Architecture']],
+    ['J0526-1317','Senior Technical Architect / DevOps Engineer','Architecture','Bangalore','India','8-12 years',2,'Open','DevSecOps Automation','MGR-1002',['Jenkins','CI/CD','Kubernetes','Ansible','Linux','Security']],
+    ['J0726-1019','OpenShift/Kubernetes, Unix Scripting, SQL, AWS','Software Development / Engineering','Hyderabad','India','4-7 years',3,'Urgent','Kubernetes Reliability','MGR-1001',['OpenShift','Kubernetes','AWS','Unix','Linux','SQL']],
+    ['J0726-0706','AI Engineer','Software Development / Engineering','Bangalore','India','3-6 years',2,'Open','AI Operations Assistant','MGR-1005',['Python','RAG','LLM','APIs','AWS']],
+    ['J0726-1244','QA Engineer - TOSCA','Testing / Quality Assurance','Hyderabad','India','3-5 years',2,'Open','Quality Engineering Transformation','MGR-1003',['TOSCA','Automation','API Testing','Agile']],
+    ['J0526-0505','Senior Software Engineer - JAVA - Sr API Developer','Software Development / Engineering','Hyderabad','India','6-9 years',3,'Closing Soon','Digital Banking APIs','MGR-1004',['Java','Spring Boot','REST APIs','Microservices']],
+    ['J0726-0998','Software Engineer','Software Development / Engineering','Hyderabad','India','2-5 years',4,'Open','Enterprise Application Services','MGR-1004',['Java','Python','SQL','Git']],
+    ['J0426-2104','Backend Developers (6-10 Years)','Software Development / Engineering','Bangalore','India','6-10 years',5,'Open','Digital Platform Engineering','MGR-1004',['Backend','Java','APIs','Databases','Microservices']],
+    ['J0426-2088','Frontend Developers (5-8 Years)','Software Development / Engineering','Bangalore','India','5-8 years',4,'Open','Digital Platform Engineering','MGR-1004',['React','Angular','JavaScript','HTML','CSS']],
+    ['J0726-1123','AIX Administrator','Infrastructure / Cloud','Bangalore','India','4-7 years',1,'Closing Soon','Enterprise Infrastructure Operations','MGR-1006',['AIX','Unix','Linux','Patching','Monitoring','Shell']],
+    ['J0626-0710','Senior Software Engineer - GCP and Data Engineer','Software Development / Engineering','Bangalore','India','6-10 years',2,'Open','Enterprise Data Platform','MGR-1008',['GCP','Data Engineering','Python','SQL','ETL']],
+    ['J0726-1028','Appian Developer','Software Development / Engineering','Chennai','India','3-6 years',2,'Open','Business Applications Modernization','MGR-1009',['Appian','Low Code','APIs','SQL','Workflow']],
+    ['J0426-1288','Control-M System Administrator','ERP / CRM / Tools','Bangalore','India','5-8 years',2,'Open','Enterprise Scheduling Services','MGR-1006',['Control-M','Linux','Shell','Scheduling','Automation']],
+    ['J0726-1093','Solution Architect','Architecture','Hyderabad','India','10-15 years',2,'Open','Cloud Platform Modernization','MGR-1001',['Architecture','Cloud','AWS','Integration','Security']],
+    ['J0726-1334','Quality Assurance Lead','Testing / Quality Assurance','Hyderabad','India','8-12 years',1,'Urgent','Quality Engineering Transformation','MGR-1003',['QA','Automation','Leadership','API Testing','Agile']],
+    ['J0726-0657','AWS Aurora PostgreSQL Engineer','Infrastructure / Cloud','Bangalore','India','5-8 years',2,'Open','Cloud Database Modernization','MGR-1008',['AWS','Aurora','PostgreSQL','Linux','Performance']],
+    ['J0626-0769','Senior QA Automation Consultant - Playwright and Google Cloud','Testing / Quality Assurance','Bangalore','India','6-10 years',2,'Open','Quality Engineering Transformation','MGR-1003',['Playwright','GCP','Automation','JavaScript','API Testing']],
+    ['J0726-1196','Scrum Master','Project Management','Hyderabad','India','6-10 years',2,'Open','Enterprise Application Services','MGR-1004',['Scrum','Agile','Jira','Delivery','Leadership']],
+    ['J0526-1061','Cloud Solutions Architect','Architecture','Pune','India','10-15 years',1,'Open','SRE and Observability','MGR-1010',['Cloud','AWS','Azure','SRE','Observability']],
+    ['J0726-0778','Senior Cybersecurity and IAM Specialist','Infrastructure / Cloud','Hyderabad','India','8-12 years',2,'Urgent','Cloud Security and Compliance','MGR-1007',['Cybersecurity','IAM','Active Directory','Cloud','Security']]
+  ].map(item => ({
+    id: item[0],
+    title: item[1],
+    category: item[2],
+    city: item[3],
+    country: item[4],
+    experience: item[5],
+    openings: item[6],
+    status: item[7],
+    project: item[8],
+    managerId: item[9],
+    skills: item[10],
+    description: `Internal opportunity supporting ${item[8]}.`
+  }));
+
+  const candidateSource = [
+    ['Aarav Reddy','Cloud Engineer',4,'Hyderabad',['AWS','Kubernetes','Linux','Terraform']],
+    ['Neha Kapoor','Senior DevOps Engineer',10,'Bangalore',['DevOps','Jenkins','Kubernetes','Ansible','AWS']],
+    ['Kiran Patel','Java API Developer',7,'Hyderabad',['Java','Spring Boot','REST APIs','Microservices']],
+    ['Divya Reddy','QA Automation Engineer',5,'Hyderabad',['TOSCA','Playwright','API Testing','Automation']],
+    ['Rohan Mehta','Linux Administrator',6,'Bangalore',['Linux','Shell','Patching','Monitoring','Ansible']],
+    ['Sneha Iyer','Data Engineer',6,'Bangalore',['Python','SQL','ETL','GCP','Data Engineering']],
+    ['Aditya Nair','Kubernetes Engineer',5,'Hyderabad',['Kubernetes','OpenShift','AWS','Linux','Helm']],
+    ['Pooja Sharma','Frontend Developer',6,'Bangalore',['React','Angular','JavaScript','HTML','CSS']],
+    ['Manish Verma','Backend Developer',8,'Bangalore',['Java','APIs','Databases','Microservices','Spring Boot']],
+    ['Lakshmi Rao','AI Engineer',4,'Bangalore',['Python','RAG','LLM','APIs','AWS']],
+    ['Harish Kumar','AIX Administrator',6,'Bangalore',['AIX','Unix','Linux','Patching','Shell']],
+    ['Meghana Das','Cloud Security Engineer',7,'Hyderabad',['Security','IAM','AWS','Active Directory','Cloud']],
+    ['Arun Joseph','SRE Engineer',8,'Pune',['SRE','Observability','Prometheus','Grafana','Linux']],
+    ['Keerthi Menon','Scrum Master',7,'Hyderabad',['Scrum','Agile','Jira','Delivery','Leadership']],
+    ['Vivek Singh','Database Engineer',6,'Bangalore',['PostgreSQL','Aurora','AWS','Linux','Performance']],
+    ['Nandini Rao','Appian Developer',4,'Chennai',['Appian','Low Code','SQL','Workflow','APIs']],
+    ['Suresh Babu','Control-M Administrator',7,'Bangalore',['Control-M','Linux','Shell','Scheduling','Automation']],
+    ['Ishita Jain','QA Lead',10,'Hyderabad',['QA','Automation','Leadership','Agile','API Testing']],
+    ['Naveen Reddy','Solution Architect',12,'Hyderabad',['Architecture','Cloud','AWS','Security','Integration']],
+    ['Asha Kulkarni','Cloud Architect',11,'Pune',['Cloud','AWS','Azure','SRE','Observability']],
+    ['Rahul Das','DevOps Engineer',5,'Hyderabad',['DevOps','Jenkins','Docker','Kubernetes','Linux']],
+    ['Swathi Nair','Python Developer',4,'Bangalore',['Python','APIs','SQL','AWS','Git']],
+    ['Mohit Agarwal','Network and Cloud Engineer',6,'Hyderabad',['Networking','AWS','Linux','Security','Monitoring']],
+    ['Anjali Thomas','Business Analyst',7,'Bangalore',['Business Analysis','Agile','Jira','SQL','Documentation']],
+    ['Praveen Kumar','OpenShift Administrator',6,'Hyderabad',['OpenShift','Kubernetes','Linux','Ansible','AWS']],
+    ['Ritika Shah','Java Full Stack Developer',7,'Chennai',['Java','Spring Boot','Angular','APIs','SQL']],
+    ['Deepak Menon','Infrastructure Lead',11,'Bangalore',['Linux','AIX','Cloud','Patching','Leadership']],
+    ['Shreya Gupta','GCP Data Engineer',5,'Bangalore',['GCP','Python','SQL','ETL','BigQuery']],
+    ['Varun Reddy','Cloud Database Engineer',7,'Bangalore',['AWS','Aurora','PostgreSQL','Linux','Automation']],
+    ['Kavita Rao','Cybersecurity Analyst',5,'Hyderabad',['Security','IAM','SIEM','Active Directory','Cloud']],
+    ['Abhishek Jain','Platform Engineer',8,'Pune',['Kubernetes','Terraform','AWS','Linux','GitOps']],
+    ['Madhuri Iyer','Test Automation Lead',9,'Hyderabad',['Automation','Playwright','TOSCA','API Testing','Leadership']],
+    ['Sunil Nair','Unix Engineer',6,'Bangalore',['Unix','Linux','Shell','Patching','Monitoring']],
+    ['Bhavana Reddy','UI Developer',5,'Bangalore',['React','JavaScript','HTML','CSS','Accessibility']],
+    ['Gaurav Sharma','Microservices Developer',8,'Hyderabad',['Java','Spring Boot','Microservices','Kafka','APIs']],
+    ['Nisha Patel','Data Analyst',4,'Bangalore',['SQL','Python','Power BI','Data Analysis','ETL']],
+    ['Rajesh Verma','DevSecOps Engineer',9,'Bangalore',['DevSecOps','Jenkins','Kubernetes','Security','Ansible']],
+    ['Priyanka Das','Cloud Support Engineer',4,'Hyderabad',['AWS','Linux','Monitoring','Networking','ITIL']],
+    ['Amit Kulkarni','Observability Engineer',7,'Pune',['Prometheus','Grafana','SRE','Linux','Cloud']],
+    ['Sonal Thomas','API Test Engineer',5,'Hyderabad',['API Testing','Postman','Automation','SQL','Agile']]
+  ];
+
+  const candidates = candidateSource.map((item, index) => ({
+    employeeId: `EMP-SAMPLE-${String(1001 + index)}`,
+    name: item[0],
+    currentRole: item[1],
+    experience: `${item[2]} years`,
+    years: item[2],
+    city: item[3],
+    skills: item[4],
+    email: `${item[0].toLowerCase().replace(/\s+/g, '.')}@cgi.example`,
+    phone: `+91 98480 02X${String(index + 1).padStart(2, '0')}`
+  }));
+
+  const initialStageCycle = [
+    'APPLIED',
+    'HR SCREENING',
+    'HR INTERVIEW SCHEDULED',
+    'SHORTLISTED',
+    'TECHNICAL ROUND 1',
+    'NEXT TECHNICAL ROUND',
+    'TECHNICAL ROUND 2',
+    'MANAGER ROUND',
+    'CLIENT ROUND',
+    'SELECTED',
+    'DOCUMENTS VERIFICATION',
+    'OFFER REVIEW',
+    'OFFER RELEASE SOON',
+    'OFFER RELEASED',
+    'JOINED',
+    'ON HOLD',
+    'REJECTED'
+  ];
+
+  const initialApplications = candidates.map((candidate, index) => ({
+    applicationId: `APP-${String(5001 + index)}`,
+    candidate: candidate.name,
+    employeeId: candidate.employeeId,
+    email: candidate.email,
+    experience: candidate.experience,
+    currentRole: candidate.currentRole,
+    city: candidate.city,
+    skills: candidate.skills,
+    jobId: jobs[index % jobs.length].id,
+    appliedOn: `2026-07-${String(1 + (index % 15)).padStart(2, '0')}`,
+    status: initialStageCycle[index % initialStageCycle.length],
+    stageUpdatedOn: null
+  }));
+
+  const defaultProfile = candidates[0];
+
+  let profile = read(PROFILE_KEY, defaultProfile);
+  let applications = read(APPLICATIONS_KEY, initialApplications);
+  let activeRole = 'candidate';
+  let attempts = 0;
+
+  function read(key, fallback) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value || structuredClone(fallback);
+    } catch {
+      return structuredClone(fallback);
+    }
+  }
+
+  function save() {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(applications));
+  }
+
+  function resetData() {
+    localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(APPLICATIONS_KEY);
+    profile = structuredClone(defaultProfile);
+    applications = structuredClone(initialApplications);
+    save();
+  }
+
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    }[char]));
+  }
+
+  function normalize(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function statusClass(value) {
+    return normalize(value);
+  }
+
+  function managerFor(job) {
+    return managers.find(manager => manager.id === job.managerId);
+  }
+
+  function applicationForCandidate(employeeId) {
+    return [...applications].reverse().find(item => item.employeeId === employeeId);
+  }
+
+  function applicationForJob(jobId) {
+    return applications.find(item =>
+      item.jobId === jobId && item.employeeId === profile.employeeId
+    );
+  }
+
+  function optionList(values) {
+    return [...new Set(values)]
+      .sort()
+      .map(value => `<option>${esc(value)}</option>`)
+      .join('');
+  }
+
+  function summaryCard(label, value) {
+    return `
+      <div class="hr-summary-card">
+        <span>${esc(label)}</span>
+        <strong>${esc(value)}</strong>
+      </div>
+    `;
+  }
+
+  function profileItem(label, value) {
+    return `
+      <div class="hr-profile-card">
+        <h4>${esc(label)}</h4>
+        <p>${esc(value)}</p>
+      </div>
+    `;
+  }
+
+  function init() {
+    attempts += 1;
+
+    const sidebar = document.getElementById('sidebar');
+    const newChat = document.getElementById('new-chat-button');
+    const messages = document.getElementById('messages');
+    const composer = document.querySelector('.composer-area');
+    const chatArea = document.querySelector('.chat-area');
+    const title = document.querySelector('.top-header h2');
+    const subtitle = document.querySelector('.top-header p');
+
+    if (!sidebar || !newChat || !messages || !composer || !chatArea) {
+      if (attempts < 60) setTimeout(init, 100);
+      return;
+    }
+
+    let nav = document.querySelector('.demo-nav');
+
+    if (!nav) {
+      nav = document.createElement('div');
+      nav.className = 'demo-nav';
+      newChat.insertAdjacentElement('afterend', nav);
+    }
+
+    let hrButton = document.getElementById('hr-portal-nav-button');
+
+    if (!hrButton) {
+      hrButton = document.createElement('button');
+      hrButton.id = 'hr-portal-nav-button';
+      hrButton.className = 'demo-nav-button';
+      hrButton.dataset.view = 'hr';
+      hrButton.textContent = '▣ HR Portal';
+      nav.appendChild(hrButton);
+    }
+
+    let hrPanel = document.getElementById('hr-portal-panel');
+
+    if (!hrPanel) {
+      hrPanel = document.createElement('section');
+      hrPanel.id = 'hr-portal-panel';
+      hrPanel.className = 'demo-panel hr-panel demo-hidden';
+      chatArea.insertBefore(hrPanel, composer);
+    }
+
+    function hideHR() {
+      hrPanel.classList.add('demo-hidden');
+    }
+
+    function showHR(role = activeRole) {
+      activeRole = role;
+
+      messages.style.display = 'none';
+      composer.style.display = 'none';
+
+      document.querySelectorAll('.demo-panel').forEach(panel => {
+        if (panel !== hrPanel) panel.classList.add('demo-hidden');
+      });
+
+      hrPanel.classList.remove('demo-hidden');
+
+      nav.querySelectorAll('button').forEach(button => {
+        button.classList.toggle('active', button === hrButton);
+      });
+
+      if (title) title.textContent = 'Internal HR Portal';
+      if (subtitle) {
+        subtitle.textContent = activeRole === 'candidate'
+          ? 'Search internal opportunities and track applications'
+          : 'Search candidates and manage every hiring stage';
+      }
+
+      renderPortal(hrPanel);
+      sidebar.classList.remove('open');
+    }
+
+    hrButton.addEventListener('click', () => showHR(activeRole));
+
+    nav.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (button && button !== hrButton) hideHR();
+    });
+
+    newChat.addEventListener('click', hideHR);
+
+    hrPanel.addEventListener('click', event => {
+      const roleButton = event.target.closest('[data-hr-role]');
+      const resetButton = event.target.closest('[data-reset-hr]');
+      const applyButton = event.target.closest('[data-apply-job]');
+      const stageButton = event.target.closest('[data-update-stage]');
+      const quickButton = event.target.closest('[data-quick-stage]');
+
+      if (roleButton) {
+        activeRole = roleButton.dataset.hrRole;
+        renderPortal(hrPanel);
+        return;
+      }
+
+      if (resetButton) {
+        resetData();
+        renderPortal(hrPanel);
+        return;
+      }
+
+      if (applyButton) {
+        applyToJob(applyButton.dataset.applyJob);
+        renderPortal(hrPanel);
+        return;
+      }
+
+      if (stageButton) {
+        const applicationId = stageButton.dataset.updateStage;
+        const select = hrPanel.querySelector(
+          `[data-stage-select="${applicationId}"]`
+        );
+
+        if (select) updateApplication(applicationId, select.value);
+        renderPortal(hrPanel);
+        return;
+      }
+
+      if (quickButton) {
+        updateApplication(
+          quickButton.dataset.applicationId,
+          quickButton.dataset.quickStage
+        );
+        renderPortal(hrPanel);
+      }
+    });
+
+    hrPanel.addEventListener('input', event => {
+      const id = event.target.id;
+
+      if (['candidate-job-keyword','candidate-job-city','candidate-job-experience','candidate-job-category'].includes(id)) {
+        renderCandidateJobs(hrPanel);
+      }
+
+      if (['manager-job-keyword','manager-job-city','manager-job-status','manager-job-manager'].includes(id)) {
+        renderManagerJobs(hrPanel);
+      }
+
+      if (['manager-candidate-keyword','manager-candidate-city','manager-candidate-experience','manager-candidate-status'].includes(id)) {
+        renderCandidatePool(hrPanel);
+      }
+    });
+
+    hrPanel.addEventListener('change', event => {
+      event.target.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    save();
+  }
+
+  function renderPortal(panel) {
+    panel.innerHTML = `
+      <div class="hr-portal-header">
+        <div>
+          <h2>Internal HR Portal</h2>
+          <p>${activeRole === 'candidate'
+            ? 'Search opportunities, apply internally and track application progress.'
+            : 'Search requisitions, find candidates and manage the complete hiring workflow.'
+          }</p>
+        </div>
+
+        <div class="hr-header-actions">
+          <div class="hr-role-switch">
+            <button
+              class="hr-role-button ${activeRole === 'candidate' ? 'active' : ''}"
+              data-hr-role="candidate"
+            >Candidate View</button>
+
+            <button
+              class="hr-role-button ${activeRole === 'manager' ? 'active' : ''}"
+              data-hr-role="manager"
+            >Manager View</button>
+          </div>
+
+          <button class="hr-reset-button" data-reset-hr>
+            Reset HR Data
+          </button>
+        </div>
+      </div>
+
+      ${activeRole === 'candidate' ? candidateView() : managerView()}
+    `;
+
+    if (activeRole === 'candidate') {
+      renderCandidateJobs(panel);
+    } else {
+      renderManagerJobs(panel);
+      renderCandidatePool(panel);
+    }
+  }
+
+  function candidateView() {
+    const myApplications = applications.filter(
+      item => item.employeeId === profile.employeeId
+    );
+
+    return `
+      <div class="hr-summary-grid">
+        ${summaryCard('Open requisitions', jobs.length)}
+        ${summaryCard('Total openings', jobs.reduce((sum, job) => sum + job.openings, 0))}
+        ${summaryCard('My applications', myApplications.length)}
+        ${summaryCard('Candidate profiles', candidates.length)}
+      </div>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>My Candidate Profile</h3>
+            <p>Profile used for the internal opportunity workflow.</p>
+          </div>
+        </div>
+
+        <div class="hr-profile-grid">
+          ${profileItem('Employee ID', profile.employeeId)}
+          ${profileItem('Name', profile.name)}
+          ${profileItem('Current role', profile.currentRole)}
+          ${profileItem('Experience', profile.experience)}
+          ${profileItem('Preferred city', profile.city)}
+          ${profileItem('Skills', profile.skills.join(', '))}
+        </div>
+      </section>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>Current Opportunities</h3>
+            <p>Search by job ID, tool, technology, location, experience or category.</p>
+          </div>
+        </div>
+
+        <div class="hr-search-grid">
+          <div class="hr-field">
+            <label for="candidate-job-keyword">Tool / Skill / Job ID</label>
+            <input id="candidate-job-keyword" type="search"
+              placeholder="DevOps, cloud, Linux, AWS, Java, Kubernetes...">
+          </div>
+
+          <div class="hr-field">
+            <label for="candidate-job-city">City</label>
+            <select id="candidate-job-city">
+              <option value="">All cities</option>
+              ${optionList(jobs.map(job => job.city))}
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="candidate-job-experience">Experience</label>
+            <select id="candidate-job-experience">
+              <option value="">All experience</option>
+              <option value="2-5">2-5 years</option>
+              <option value="4-7">4-7 years</option>
+              <option value="6-10">6-10 years</option>
+              <option value="8-12">8-12 years</option>
+              <option value="10-15">10-15 years</option>
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="candidate-job-category">Category</label>
+            <select id="candidate-job-category">
+              <option value="">All categories</option>
+              ${optionList(jobs.map(job => job.category))}
+            </select>
+          </div>
+        </div>
+
+        <div id="candidate-job-results" class="hr-job-grid"></div>
+      </section>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>My Applications</h3>
+            <p>Current application progress for ${esc(profile.name)}.</p>
+          </div>
+        </div>
+
+        ${candidateApplications(myApplications)}
+      </section>
+
+      <p class="hr-placeholder-note">
+        All names, email aliases and phone values are fictional sample records.
+        Replace them only with approved internal directory information.
+      </p>
+    `;
+  }
+
+  function managerView() {
+    return `
+      <div class="hr-summary-grid">
+        ${summaryCard('Active requisitions', jobs.length)}
+        ${summaryCard('Hiring managers', managers.length)}
+        ${summaryCard('Candidate profiles', candidates.length)}
+        ${summaryCard('Applications', applications.length)}
+      </div>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>Search Open Requisitions</h3>
+            <p>Search by DevOps, cloud, Linux, AWS, Java, Kubernetes, project or manager.</p>
+          </div>
+        </div>
+
+        <div class="hr-search-grid">
+          <div class="hr-field">
+            <label for="manager-job-keyword">Tool / Skill / Job ID</label>
+            <input id="manager-job-keyword" type="search"
+              placeholder="DevOps, cloud, Linux, AWS, Java, Kubernetes...">
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-job-city">Location</label>
+            <select id="manager-job-city">
+              <option value="">All locations</option>
+              ${optionList(jobs.map(job => job.city))}
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-job-status">Status</label>
+            <select id="manager-job-status">
+              <option value="">All statuses</option>
+              <option>Open</option>
+              <option>Urgent</option>
+              <option>Closing Soon</option>
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-job-manager">Hiring manager</label>
+            <select id="manager-job-manager">
+              <option value="">All managers</option>
+              ${managers.map(manager =>
+                `<option value="${esc(manager.id)}">${esc(manager.name)}</option>`
+              ).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div id="manager-job-results"></div>
+      </section>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>Search Candidate Pool</h3>
+            <p>Search 40 profiles and move every applicant through the complete hiring workflow.</p>
+          </div>
+        </div>
+
+        <div class="hr-search-grid">
+          <div class="hr-field">
+            <label for="manager-candidate-keyword">Candidate / Skill / Role</label>
+            <input id="manager-candidate-keyword" type="search"
+              placeholder="DevOps, Linux, cloud, Java, QA, Kubernetes...">
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-candidate-city">City</label>
+            <select id="manager-candidate-city">
+              <option value="">All cities</option>
+              ${optionList(candidates.map(candidate => candidate.city))}
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-candidate-experience">Experience</label>
+            <select id="manager-candidate-experience">
+              <option value="">All experience</option>
+              <option value="2-5">2-5 years</option>
+              <option value="4-7">4-7 years</option>
+              <option value="6-10">6-10 years</option>
+              <option value="10-15">10-15 years</option>
+            </select>
+          </div>
+
+          <div class="hr-field">
+            <label for="manager-candidate-status">Hiring stage</label>
+            <select id="manager-candidate-status">
+              <option value="">All stages</option>
+              ${stages.map(stage => `<option>${esc(stage)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div id="manager-candidate-results"></div>
+      </section>
+
+      <section class="hr-section">
+        <div class="hr-section-header">
+          <div>
+            <h3>Hiring Managers and Projects</h3>
+            <p>Sample manager directory for internal hiring activity.</p>
+          </div>
+        </div>
+
+        <div class="hr-manager-grid">
+          ${managers.map(managerCard).join('')}
+        </div>
+      </section>
+
+      <p class="hr-placeholder-note">
+        These are fictional sample manager records. The cgi.example addresses
+        are non-routable placeholders, and phone values are masked.
+      </p>
+    `;
+  }
+
+  function managerCard(manager) {
+    const managerJobs = jobs.filter(job => job.managerId === manager.id);
+
+    return `
+      <article class="hr-manager-card">
+        <h4>${esc(manager.name)}</h4>
+        <p>${esc(manager.role)}</p>
+        <p><strong>Location:</strong> ${esc(manager.city)}</p>
+
+        <div class="hr-manager-project">
+          <span>Primary project</span>
+          <strong>${esc(manager.project)}</strong>
+        </div>
+
+        <p><strong>Active requisitions:</strong> ${managerJobs.length}</p>
+        <p><strong>Email:</strong> ${esc(manager.email)}</p>
+        <p><strong>Phone:</strong> ${esc(manager.phone)}</p>
+      </article>
+    `;
+  }
+
+  function renderCandidateJobs(panel) {
+    const target = panel.querySelector('#candidate-job-results');
+    if (!target) return;
+
+    const keyword = normalize(panel.querySelector('#candidate-job-keyword')?.value);
+    const city = panel.querySelector('#candidate-job-city')?.value || '';
+    const experience = panel.querySelector('#candidate-job-experience')?.value || '';
+    const category = panel.querySelector('#candidate-job-category')?.value || '';
+
+    const filtered = jobs.filter(job => {
+      const manager = managerFor(job);
+      const text = normalize([
+        job.id, job.title, job.category, job.city, job.country,
+        job.experience, job.project, job.skills.join(' '),
+        manager?.name, manager?.role
+      ].join(' '));
+
+      return (
+        (!keyword || text.includes(keyword)) &&
+        (!city || job.city === city) &&
+        (!experience || job.experience.includes(experience)) &&
+        (!category || job.category === category)
+      );
+    });
+
+    target.innerHTML = filtered.length
+      ? filtered.map(jobCard).join('')
+      : '<div class="hr-empty">No matching opportunities were found.</div>';
+  }
+
+  function jobCard(job) {
+    const manager = managerFor(job);
+    const existing = applicationForJob(job.id);
+
+    return `
+      <article class="hr-job-card">
+        <div class="hr-job-top">
+          <div>
+            <p class="hr-job-id">${esc(job.id)}</p>
+            <h4 class="hr-job-title">${esc(job.title)}</h4>
+          </div>
+
+          <span class="hr-status ${statusClass(job.status)}">
+            ${esc(job.status)}
+          </span>
+        </div>
+
+        <div class="hr-job-meta">
+          <div><span>Location</span><strong>${esc(job.city)}, ${esc(job.country)}</strong></div>
+          <div><span>Experience</span><strong>${esc(job.experience)}</strong></div>
+          <div><span>Category</span><strong>${esc(job.category)}</strong></div>
+          <div><span>Openings</span><strong>${esc(job.openings)}</strong></div>
+        </div>
+
+        <p class="hr-job-description">${esc(job.description)}</p>
+
+        <div class="hr-skill-list">
+          ${job.skills.map(skill =>
+            `<span class="hr-skill">${esc(skill)}</span>`
+          ).join('')}
+        </div>
+
+        <div class="hr-contact">
+          <strong>Project:</strong> ${esc(job.project)}<br>
+          <strong>Hiring manager:</strong> ${esc(manager?.name || 'Assigned manager')}<br>
+          <strong>Contact:</strong> ${esc(manager?.email || 'Not assigned')}
+        </div>
+
+        <div class="hr-card-actions">
+          <button
+            class="hr-primary-button"
+            data-apply-job="${esc(job.id)}"
+            ${existing ? 'disabled' : ''}
+          >
+            ${existing ? `Applied - ${esc(existing.status)}` : 'Apply Internally'}
+          </button>
+        </div>
+      </article>
+    `;
+  }
+
+  function renderManagerJobs(panel) {
+    const target = panel.querySelector('#manager-job-results');
+    if (!target) return;
+
+    const keyword = normalize(panel.querySelector('#manager-job-keyword')?.value);
+    const city = panel.querySelector('#manager-job-city')?.value || '';
+    const status = panel.querySelector('#manager-job-status')?.value || '';
+    const managerId = panel.querySelector('#manager-job-manager')?.value || '';
+
+    const filtered = jobs.filter(job => {
+      const manager = managerFor(job);
+      const text = normalize([
+        job.id, job.title, job.category, job.city, job.country,
+        job.experience, job.project, job.skills.join(' '),
+        manager?.name, manager?.role
+      ].join(' '));
+
+      return (
+        (!keyword || text.includes(keyword)) &&
+        (!city || job.city === city) &&
+        (!status || job.status === status) &&
+        (!managerId || job.managerId === managerId)
+      );
+    });
+
+    target.innerHTML = managerJobTable(filtered);
+  }
+
+  function managerJobTable(items) {
+    if (!items.length) {
+      return '<div class="hr-empty">No matching requisitions were found.</div>';
+    }
+
+    return `
+      <div class="hr-table-wrap">
+        <table class="hr-table">
+          <thead>
+            <tr>
+              <th>Job ID</th>
+              <th>Title / Skills</th>
+              <th>Project</th>
+              <th>Location</th>
+              <th>Experience</th>
+              <th>Openings</th>
+              <th>Applicants</th>
+              <th>Manager</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${items.map(job => {
+              const manager = managerFor(job);
+              const count = applications.filter(
+                application => application.jobId === job.id
+              ).length;
+
+              return `
+                <tr>
+                  <td>${esc(job.id)}</td>
+                  <td><strong>${esc(job.title)}</strong><br>${esc(job.skills.join(', '))}</td>
+                  <td>${esc(job.project)}</td>
+                  <td>${esc(job.city)}</td>
+                  <td>${esc(job.experience)}</td>
+                  <td>${esc(job.openings)}</td>
+                  <td>${esc(count)}</td>
+                  <td>${esc(manager?.name || 'Assigned manager')}</td>
+                  <td><span class="hr-status ${statusClass(job.status)}">${esc(job.status)}</span></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderCandidatePool(panel) {
+    const target = panel.querySelector('#manager-candidate-results');
+    if (!target) return;
+
+    const keyword = normalize(panel.querySelector('#manager-candidate-keyword')?.value);
+    const city = panel.querySelector('#manager-candidate-city')?.value || '';
+    const experience = panel.querySelector('#manager-candidate-experience')?.value || '';
+    const status = panel.querySelector('#manager-candidate-status')?.value || '';
+
+    const filtered = candidates.filter(candidate => {
+      const application = applicationForCandidate(candidate.employeeId);
+      const text = normalize([
+        candidate.employeeId, candidate.name, candidate.currentRole,
+        candidate.experience, candidate.city, candidate.skills.join(' '),
+        application?.status, application?.jobId
+      ].join(' '));
+
+      return (
+        (!keyword || text.includes(keyword)) &&
+        (!city || candidate.city === city) &&
+        (!experience || experienceMatch(candidate.years, experience)) &&
+        (!status || application?.status === status)
+      );
+    });
+
+    target.innerHTML = candidatePoolTable(filtered);
+  }
+
+  function experienceMatch(years, selectedRange) {
+    const [minimum, maximum] = selectedRange.split('-').map(Number);
+    return years >= minimum && years <= maximum;
+  }
+
+  function stageOptions(currentStatus) {
+    return stages.map(stage => `
+      <option value="${esc(stage)}" ${stage === currentStatus ? 'selected' : ''}>
+        ${esc(stage)}
+      </option>
+    `).join('');
+  }
+
+  function candidatePoolTable(items) {
+    if (!items.length) {
+      return '<div class="hr-empty">No matching candidates were found.</div>';
+    }
+
+    return `
+      <div class="hr-table-wrap">
+        <table class="hr-table hr-candidate-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Current role</th>
+              <th>Experience</th>
+              <th>City</th>
+              <th>Skills</th>
+              <th>Latest application</th>
+              <th>Status</th>
+              <th class="hr-action-column">Hiring Stage / Manager Action</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${items.map(candidate => {
+              const application = applicationForCandidate(candidate.employeeId);
+              const job = jobs.find(value => value.id === application?.jobId);
+              const currentStatus = application?.status || 'APPLIED';
+
+              return `
+                <tr>
+                  <td>
+                    <strong>${esc(candidate.name)}</strong><br>
+                    ${esc(candidate.employeeId)}<br>
+                    ${esc(candidate.email)}<br>
+                    ${esc(candidate.phone)}
+                  </td>
+
+                  <td>${esc(candidate.currentRole)}</td>
+                  <td>${esc(candidate.experience)}</td>
+                  <td>${esc(candidate.city)}</td>
+                  <td>${esc(candidate.skills.join(', '))}</td>
+
+                  <td>
+                    ${esc(application?.jobId || '')}<br>
+                    ${esc(job?.title || 'Position')}
+                  </td>
+
+                  <td>
+                    <span class="hr-status ${statusClass(currentStatus)}">
+                      ${esc(currentStatus)}
+                    </span>
+                  </td>
+
+                  <td class="hr-action-column">
+                    <div class="hr-stage-control">
+                      <label>
+                        Move candidate to
+                        <select
+                          class="hr-stage-select"
+                          data-stage-select="${esc(application.applicationId)}"
+                        >
+                          ${stageOptions(currentStatus)}
+                        </select>
+                      </label>
+
+                      <button
+                        class="hr-primary-button hr-stage-update-button"
+                        data-update-stage="${esc(application.applicationId)}"
+                      >Update Status</button>
+
+                      <div class="hr-quick-actions">
+                        ${quickButton(application.applicationId, 'HR INTERVIEW SCHEDULED', 'Schedule', 'hr-warning-button')}
+                        ${quickButton(application.applicationId, 'NEXT TECHNICAL ROUND', 'Next Round', 'hr-neutral-button')}
+                        ${quickButton(application.applicationId, 'SELECTED', 'Select', 'hr-success-button')}
+                        ${quickButton(application.applicationId, 'OFFER RELEASE SOON', 'Offer Soon', 'hr-warning-button')}
+                        ${quickButton(application.applicationId, 'REJECTED', 'Reject', 'hr-danger-button')}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function quickButton(applicationId, stage, label, className) {
+    return `
+      <button
+        class="${className}"
+        data-application-id="${esc(applicationId)}"
+        data-quick-stage="${esc(stage)}"
+      >${esc(label)}</button>
+    `;
+  }
+
+  function candidateApplications(items) {
+    if (!items.length) {
+      return '<div class="hr-empty">No applications submitted yet.</div>';
+    }
+
+    return `
+      <div class="hr-table-wrap">
+        <table class="hr-table">
+          <thead>
+            <tr>
+              <th>Application</th>
+              <th>Job ID</th>
+              <th>Position</th>
+              <th>Project</th>
+              <th>Applied on</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${items.map(item => {
+              const job = jobs.find(value => value.id === item.jobId);
+
+              return `
+                <tr>
+                  <td>${esc(item.applicationId)}</td>
+                  <td>${esc(item.jobId)}</td>
+                  <td>${esc(job?.title || 'Position')}</td>
+                  <td>${esc(job?.project || 'Project')}</td>
+                  <td>${esc(item.appliedOn)}</td>
+                  <td><span class="hr-status ${statusClass(item.status)}">${esc(item.status)}</span></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function applyToJob(jobId) {
+    if (applicationForJob(jobId)) return;
+
+    applications.push({
+      applicationId: `APP-${String(6001 + applications.length)}`,
+      candidate: profile.name,
+      employeeId: profile.employeeId,
+      email: profile.email,
+      experience: profile.experience,
+      currentRole: profile.currentRole,
+      city: profile.city,
+      skills: profile.skills,
+      jobId,
+      appliedOn: new Date().toISOString().slice(0, 10),
+      status: 'APPLIED',
+      stageUpdatedOn: null
+    });
+
+    save();
+  }
+
+  function updateApplication(applicationId, status) {
+    const application = applications.find(
+      item => item.applicationId === applicationId
+    );
+
+    if (!application) return;
+
+    application.status = status;
+    application.stageUpdatedOn = new Date().toISOString();
+    save();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+JSEOF
+
+# -------------------------------------------------------------------
+# Add final HR Portal references with cache-busting.
+# -------------------------------------------------------------------
+python3 - <<'PY'
+from pathlib import Path
+import time
+
+index_file = Path.home() / "opsai-assistant-aws" / "app" / "web" / "index.html"
+content = index_file.read_text(encoding="utf-8")
+version = str(int(time.time()))
+
+css_tag = f'  <link rel="stylesheet" href="hr-portal.css?v={version}">'
+js_tag = f'  <script src="hr-portal.js?v={version}"></script>'
+
+if "</head>" not in content:
+    raise SystemExit("ERROR: </head> was not found in index.html.")
+
+if "</body>" not in content:
+    raise SystemExit("ERROR: </body> was not found in index.html.")
+
+content = content.replace("</head>", f"{css_tag}\n</head>", 1)
+content = content.replace("</body>", f"{js_tag}\n</body>", 1)
+
+index_file.write_text(content, encoding="utf-8")
+print(f"Final HR Portal references added with version {version}.")
+PY
+
+# -------------------------------------------------------------------
+# Validate the final portal.
+# -------------------------------------------------------------------
+node --check "$WEB_DIR/hr-portal.js"
+
+grep -q "hr-portal.css" "$WEB_DIR/index.html"
+grep -q "hr-portal.js" "$WEB_DIR/index.html"
+grep -q "HR Portal" "$WEB_DIR/hr-portal.js"
+grep -q "Manager View" "$WEB_DIR/hr-portal.js"
+grep -q "Candidate View" "$WEB_DIR/hr-portal.js"
+grep -q "NEXT TECHNICAL ROUND" "$WEB_DIR/hr-portal.js"
+grep -q "CLIENT ROUND" "$WEB_DIR/hr-portal.js"
+grep -q "DOCUMENTS VERIFICATION" "$WEB_DIR/hr-portal.js"
+grep -q "OFFER RELEASE SOON" "$WEB_DIR/hr-portal.js"
+grep -q "OFFER RELEASED" "$WEB_DIR/hr-portal.js"
+grep -q "EMP-SAMPLE-1040" "$WEB_DIR/hr-portal.js"
+
+echo "Final HR Portal validation passed."
+echo "Managers: 10"
+echo "Requisitions: 20"
+echo "Candidates: 40"
+echo "Applications: 40"
+echo "Hiring stages: 17"
+
+# -------------------------------------------------------------------
+# Package and deploy to Amplify.
+# -------------------------------------------------------------------
+rm -f "$PROJECT_DIR/app/opsai-assistant-ui.zip"
+
+(
+  cd "$WEB_DIR"
+  zip -qr ../opsai-assistant-ui.zip .
+)
+
+DEPLOYMENT_OUTPUT="$(aws amplify create-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --region "$AWS_REGION" \
+  --output json)"
+
+JOB_ID="$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["jobId"])')"
+
+UPLOAD_URL="$(echo "$DEPLOYMENT_OUTPUT" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')"
+
+echo "Amplify deployment job: $JOB_ID"
+
+curl -sS \
+  --upload-file "$PROJECT_DIR/app/opsai-assistant-ui.zip" \
+  "$UPLOAD_URL"
+
+aws amplify start-deployment \
+  --app-id "$AMPLIFY_APP_ID" \
+  --branch-name "$AMPLIFY_BRANCH_NAME" \
+  --job-id "$JOB_ID" \
+  --region "$AWS_REGION" \
+  >/dev/null
+
+while true; do
+  STATUS="$(aws amplify get-job \
+    --app-id "$AMPLIFY_APP_ID" \
+    --branch-name "$AMPLIFY_BRANCH_NAME" \
+    --job-id "$JOB_ID" \
+    --region "$AWS_REGION" \
+    --query 'job.summary.status' \
+    --output text)"
+
+  echo "Deployment status: $STATUS"
+
+  case "$STATUS" in
+    SUCCEED)
+      break
+      ;;
+    FAILED|CANCELLED)
+      echo "ERROR: Amplify deployment failed."
+      exit 1
+      ;;
+    *)
+      sleep 10
+      ;;
+  esac
+done
+
+echo
+echo "========================================================"
+echo "Final Internal HR Portal installed successfully."
+echo "========================================================"
+echo
+echo "URL: $AMPLIFY_URL"
+echo
+echo "Open the URL in an Incognito window or press Ctrl + Shift + R."
+echo "Use HR Portal > Candidate View or Manager View."
+

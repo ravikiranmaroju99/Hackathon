@@ -1,0 +1,155 @@
+Steps10
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Step 10A — Open the Bedrock Agent Creation Page
+
+For this hackathon MVP, we will use Agents Classic because it is the quickest way to connect the Knowledge Base now and add Lambda actions later. Agents can decide whether to query a Knowledge Base or call an action group.
+
+Click Close at the top-right.
+From the left menu, under Build, click:
+Agents Classic
+Click:
+Create agent
+
+Do not enter any details yet. Send me the Create agent screen.
+
+_____________________________
+
+Step 10B — Create the OpsAI Agent
+
+Enter these details:
+
+Name
+
+opsai-assistant-agent
+
+Description
+
+AI operations assistant that uses approved runbooks to support Kubernetes, Jenkins, cloud and infrastructure troubleshooting.
+
+Leave this unchecked:
+
+Enable multi-agent collaboration
+
+Now click Create.
+
+After the agent page opens, do not configure anything yet.
+
+_____________________
+
+Step 10C — Select the Agent Model
+
+Keep this selected:
+
+Create default role
+
+AWS will create the service role needed by the agent.
+
+Now:
+
+Click Select model.
+Choose Amazon.
+Select Nova Lite.
+Keep On-demand if shown.
+Click Apply.
+
+Do not enter the agent instructions yet.
+
+__________________________
+
+Step 10D — Add Agent Instructions
+
+Copy and paste this into Instructions for the Agent:
+
+You are OpsAI Assistant, an enterprise IT operations support agent.
+
+Use the connected knowledge base and approved runbooks to answer questions about Kubernetes, RKE2, Jenkins, cloud and infrastructure operations.
+
+Give answers in easy English with clear numbered steps.
+
+Do not invent commands, facts or procedures. If the approved knowledge base does not contain the answer, clearly say that the information is not available.
+
+For any restart, reboot, deletion, scaling, patching or production change, explain the impact and require human approval before the action is performed.
+
+Always provide validation steps after troubleshooting or recovery actions.
+
+Agent instructions tell Bedrock what the agent should do and how it should communicate with users.
+
+After pasting:
+
+Click Save at the top.
+Do not click Prepare yet.
+Do not add an action group yet.
+
+_________________________
+
+Step 10E — Connect the Knowledge Base
+
+Do not click Prepare yet.
+
+Scroll down until you see Knowledge bases.
+Click Add.
+Select:
+opsai-assistant-kb
+For the Knowledge Base instructions, enter:
+Use this knowledge base to answer questions about Kubernetes, RKE2, Jenkins, cloud and infrastructure troubleshooting using approved runbooks.
+Click Add or Save in the popup.
+
+Complete only this step
+
+
+_________________________
+
+Step 10E — Connect the Knowledge Base
+
+Do not click Prepare yet.
+
+Scroll down until you see Knowledge bases.
+Click Add.
+Select:
+opsai-assistant-kb
+For the Knowledge Base instructions, enter:
+Use this knowledge base to answer questions about Kubernetes, RKE2, Jenkins, cloud and infrastructure troubleshooting using approved runbooks.
+Click Add or Save in the popup.
+
+Complete only this step
+
+
+_________________________________
+
+Step 10F — Prepare the Agent
+
+Click Prepare at the top.
+
+Wait until you see a green success message similar to:
+
+Agent preparation completed successfully.
+
+Do not test the agent yet.
+
+_________________________________
+
+Step 10G — Test the Agent
+
+In the Test Agent box on the right, enter:
+
+What should I check when a Kubernetes node becomes unavailable? Give me easy numbered steps.
+
+Then click Run.
+
+Expected result
+
+The agent should answer using your approved Kubernetes runbook and include steps such as:
+
+Check node status
+Describe the node
+Check pods on the node
+Check CPU, memory and disk
+Check the RKE2 service
+Cordon and drain before approved maintenance
+Validate that the node returns to Ready
+
+Run only this test
+
+
+______________________________

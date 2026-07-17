@@ -1,0 +1,183 @@
+Steps5
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Step 5 — Create and Upload Sample Knowledge Documents
+
+Amazon Bedrock Knowledge Bases can read documents such as text, Markdown, HTML, and PDF files from an S3 data source.
+
+In CloudShell, run this complete block:
+
+Command starts from here
++++++++++++++++++++++++++++++
+
+cd ~/opsai-assistant-aws
+source .env
+
+# Create sample knowledge documents
+cat > data/kubernetes-node-unavailable.md <<'EOF'
+# Kubernetes Node Unavailable Runbook
+
+## Issue
+
+A Kubernetes or RKE2 worker node is showing as NotReady or Unavailable.
+
+## Initial Checks
+
+Run:
+
+kubectl get nodes -o wide
+
+kubectl describe node NODE_NAME
+
+kubectl get pods -A --field-selector spec.nodeName=NODE_NAME
+
+## Common Causes
+
+- RKE2 service stopped
+- High CPU or memory usage
+- Disk pressure
+- Network connectivity issue
+- Container runtime issue
+- Certificate or time synchronization issue
+
+## Safe Recovery Steps
+
+1. Check the node status.
+2. Check CPU, memory and disk usage.
+3. Check the RKE2 agent service.
+4. Cordon the node before maintenance.
+5. Drain workloads when downtime is approved.
+6. Restart the RKE2 service or reboot the server.
+7. Confirm the node returns to Ready.
+8. Uncordon the node.
+
+## Validation
+
+Run:
+
+kubectl get nodes
+
+kubectl get pods -A --field-selector spec.nodeName=NODE_NAME
+
+The node must show Ready and the required application pods must be Running.
+EOF
+
+cat > data/disk-pressure-runbook.md <<'EOF'
+# Kubernetes Disk Pressure Runbook
+
+## Issue
+
+A Kubernetes node reports DiskPressure or applications cannot create new files.
+
+## Checks
+
+Run:
+
+df -h
+
+df -i
+
+du -xsh /var/lib/rancher/rke2/*
+
+journalctl -u rke2-agent --since "30 minutes ago"
+
+kubectl describe node NODE_NAME
+
+## Common Causes
+
+- Container images using too much disk
+- Old log files
+- Deleted files still held by a process
+- Large application data
+- Inode exhaustion
+
+## Recovery Steps
+
+1. Identify the filesystem with high usage.
+2. Identify the largest directories.
+3. Remove only approved old logs and unused files.
+4. Do not manually delete active containerd data.
+5. Restart the affected service only when required.
+6. Confirm DiskPressure is removed.
+
+## Validation
+
+Run:
+
+kubectl get nodes
+
+kubectl describe node NODE_NAME
+
+The DiskPressure condition should show False.
+EOF
+
+cat > data/jenkins-pipeline-failure.md <<'EOF'
+# Jenkins Pipeline Failure Runbook
+
+## Issue
+
+A Jenkins build fails, hangs or cannot connect to a destination server.
+
+## Checks
+
+1. Open the Jenkins console output.
+2. Identify the failed stage.
+3. Check credentials configuration.
+4. Test network connectivity.
+5. Confirm the destination server is reachable.
+6. Check whether the Jenkins agent is online.
+7. Check disk space and memory.
+
+## Useful Commands
+
+ping SERVER_NAME
+
+ssh -o ConnectTimeout=30 USER@SERVER_NAME
+
+df -h
+
+free -m
+
+## Common Causes
+
+- Incorrect credentials
+- Destination server unavailable
+- Jenkins agent offline
+- Network or DNS issue
+- Script syntax error
+- Insufficient disk or memory
+- Command timeout
+
+## Recovery Steps
+
+1. Fix the confirmed cause.
+2. Test connectivity manually.
+3. Restart only the failed pipeline stage when possible.
+4. Run the pipeline again.
+5. Confirm that all stages complete successfully.
+EOF
+
+# Review the files
+ls -lh data/
+
+# Upload the documents to S3
+aws s3 sync \
+  data/ \
+  "s3://$OPSAI_BUCKET/knowledge/" \
+  --exclude "*" \
+  --include "*.md"
+Validate Step 5
+
+Run:
+
+aws s3 ls \
+  "s3://$OPSAI_BUCKET/knowledge/" \
+  --recursive
+
+You should see these three files:
+
+knowledge/kubernetes-node-unavailable.md
+knowledge/disk-pressure-runbook.md
+knowledge/jenkins-pipeline-failure.md
+
+Complete only Step 5
