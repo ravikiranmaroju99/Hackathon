@@ -1,0 +1,83 @@
+Demo topic	Exact question to type	What it demonstrates
+1. Kubernetes incident and human approval	An RKE2 worker node is NotReady. Give me the troubleshooting steps, possible application impact, approval required before restart, and final validation steps.	Approved runbook knowledge, safety, impact analysis, human approval and validation
+2. DiskPressure troubleshooting	A Kubernetes worker node shows DiskPressure=True and the root filesystem usage is 92%. Explain the cause, safe troubleshooting steps, approval requirements, and how to confirm the issue is resolved.	Real infrastructure use case, controlled remediation and operational knowledge
+3. Jenkins and DevOps support	A Jenkins pipeline has failed. Give me a step-by-step troubleshooting checklist covering logs, credentials, network access, agent status, workspace, and validation.	DevOps reuse, faster troubleshooting, consistency and reduced dependency on experts
+4. Business value and CGI reusability	What are the main benefits of OpsAI Assistant? Explain the business value, measurable time savings, CGI reusability, governance, and use cases across different IT teams and industries.	AI-to-ROI, CGI accelerator value, industry reuse and originality
+5. Identity and responsible AI	Who created OpsAI Assistant, whom should I contact for suggestions, and what Responsible AI controls are included in the solution?	Creator information, approved contact, governance and Responsible AI
+Best question for the voice demonstration
+
+Use the microphone for the first question:
+
+An RKE2 worker node is NotReady. Give me the troubleshooting steps, possible application impact, approval required before restart, and final validation steps.
+
+This is the strongest voice demo because it shows:
+
+Voice input
+→ AI Knowledge Base answer
+→ Operational impact
+→ Human approval
+→ Validation
+→ Spoken response
+What to show after each question
+After Question 1
+
+Open Infrastructure Assets and select a VM showing:
+
+NotReady
+Critical vulnerability
+Reboot required
+
+Click Request approval.
+
+Then open Approvals and show:
+
+Reason for the action
+Possible impact
+Human approval
+Simulated remediation
+Validation result
+After Question 2
+
+In Infrastructure Assets, filter or search for:
+
+DiskPressure
+
+Explain:
+
+OpsAI connects approved troubleshooting knowledge with the affected infrastructure record and a controlled approval workflow.
+
+After Question 3
+
+Explain:
+
+The same assistant can support Kubernetes, Jenkins, cloud operations, DevOps, SRE, service desk, application support and infrastructure teams.
+
+After Question 4
+
+Open:
+
+Value & ROI
+Industry Use Cases
+
+Change the ROI assumptions and show the calculated monthly and yearly savings.
+
+After Question 5
+
+Open Governance & Audit and show:
+
+Knowledge grounding
+Human approval
+Explainability
+Audit trail
+Privacy
+RBAC design
+No automatic production changes
+Five easy presentation headings
+
+Use these headings while presenting:
+
+AI-powered troubleshooting
+Safe infrastructure remediation
+DevOps and operational efficiency
+Business value and CGI reusability
+Responsible AI and governance
