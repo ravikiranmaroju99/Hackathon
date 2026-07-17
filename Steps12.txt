@@ -8,10 +8,19 @@ Open CloudShell as opsai-admin and run:
 
 Change the agent id MYZQPFHH7P 
 
-aws bedrock-agent list-agent-aliases \
-  --agent-id FJ6R3CBW6H \
-  --region us-east-1 \
-  --query 'agentAliasSummaries[].{AliasName:agentAliasName,AliasID:agentAliasId,Status:agentAliasStatus}' \
+cd ~/opsai-assistant-aws
+
+export AWS_REGION=us-east-1
+export AWS_DEFAULT_REGION=us-east-1
+
+AGENT_ID="S64EIXPDJJ"
+ALIAS_ID="MYZQPFHH7P"
+
+aws bedrock-agent get-agent-alias \
+  --agent-id "$AGENT_ID" \
+  --agent-alias-id "$ALIAS_ID" \
+  --region "$AWS_REGION" \
+  --query 'agentAlias.{AliasName:agentAliasName,AliasID:agentAliasId,Status:agentAliasStatus,AssociatedVersion:routingConfiguration[0].agentVersion}' \
   --output table
 
 You should see:
