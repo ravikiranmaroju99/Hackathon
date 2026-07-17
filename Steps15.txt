@@ -51,6 +51,10 @@ fi
 
 echo "API ID: $API_ID"
 
+
+
+
+
 CORS is needed because the chatbot UI and API will initially use different web addresses. API Gateway can automatically answer browser OPTIONS preflight requests after CORS is configured.
 
 Step 15B — Connect API Gateway to Lambda
@@ -192,11 +196,21 @@ curl -sS \
     "sessionId": "opsai-api-test-001"
   }' \
   | python3 -m json.tool
+
+
+
+
+
 Expected result
 {
   "answer": "Here are the steps to check when a Kubernetes node becomes unavailable...",
   "sessionId": "opsai-api-test-001"
 }
+
+
+
+
+
 Optional CORS validation
 
 Run:
