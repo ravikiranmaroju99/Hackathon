@@ -44,21 +44,47 @@ mkdir -p ~/opsai-assistant-aws/{app,scripts,lambda,schemas,data,docs,reports}
 
 cd ~/opsai-assistant-aws
 
-cat > .env <<'EOF'
-AWS_REGION=us-east-1
-AWS_DEFAULT_REGION=us-east-1
-OPSAI_BUCKET=opsai-assistant-kb-845482522818-us-east-1
-BEDROCK_AGENT_ID=FJ6R3CBW6H
-BEDROCK_AGENT_ALIAS_ID=LRVAF80EAC
+AWS_REGION="us-east-1"
+AWS_DEFAULT_REGION="us-east-1"
+
+ACCOUNT_ID=$(aws sts get-caller-identity \
+  --query Account \
+  --output text)
+
+OPSAI_BUCKET="opsai-assistant-kb-${ACCOUNT_ID}-${AWS_REGION}"
+
+BEDROCK_AGENT_ID="S64EIXPDJJ"
+BEDROCK_AGENT_ALIAS_ID="MYZQPFHH7P"
+
+echo "Checking bucket: $OPSAI_BUCKET"
+
+aws s3api head-bucket \
+  --bucket "$OPSAI_BUCKET"
+
+cat > .env <<EOF
+AWS_REGION=$AWS_REGION
+AWS_DEFAULT_REGION=$AWS_DEFAULT_REGION
+OPSAI_BUCKET=$OPSAI_BUCKET
+BEDROCK_AGENT_ID=$BEDROCK_AGENT_ID
+BEDROCK_AGENT_ALIAS_ID=$BEDROCK_AGENT_ALIAS_ID
 EOF
 
 chmod 600 .env
-source .env
 
+set -a
+source .env
+set +a
+
+echo
 echo "Region: $AWS_REGION"
 echo "Bucket: $OPSAI_BUCKET"
 echo "Agent ID: $BEDROCK_AGENT_ID"
 echo "Alias ID: $BEDROCK_AGENT_ALIAS_ID"
+
+
+
+
+
 Expected output
 Region: us-east-1
 Bucket: opsai-assistant-kb-845482522818-us-east-1
